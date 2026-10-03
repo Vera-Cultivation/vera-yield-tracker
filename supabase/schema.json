@@ -1,0 +1,955 @@
+{
+  "project": "https://utmrudryffiokvkgudlf.supabase.co",
+  "fetchedAt": "2026-10-01T19:57:42.558Z",
+  "tables": [
+    {
+      "name": "app_users",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "auth_uid",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "full_name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "role",
+          "type": "public.user_role",
+          "nullable": false,
+          "default": "staff",
+          "enum": [
+            "admin",
+            "staff"
+          ]
+        },
+        {
+          "name": "status",
+          "type": "public.user_status",
+          "nullable": false,
+          "default": "active",
+          "enum": [
+            "active",
+            "invited",
+            "disabled"
+          ]
+        },
+        {
+          "name": "last_seen",
+          "type": "timestamp with time zone",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "crop_reports",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "cycle_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "harvest_cycles.id"
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "harvest_report_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "harvest_reports.id"
+        },
+        {
+          "name": "cycle",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "generated_on",
+          "type": "date",
+          "nullable": true
+        },
+        {
+          "name": "headline",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "summary",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "recommendations",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "prior_cycles",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "daily_records",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "cycle_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "harvest_cycles.id"
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "day_number",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "record_date",
+          "type": "date",
+          "nullable": false
+        },
+        {
+          "name": "temp",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "rh",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "co2",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "vwc",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "ec",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "leach_ph",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "leach_ec",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "note",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "environment_current",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "metric",
+          "type": "public.metric_kind",
+          "nullable": false,
+          "enum": [
+            "temp",
+            "rh",
+            "co2",
+            "vwc",
+            "ec",
+            "rzt"
+          ]
+        },
+        {
+          "name": "value",
+          "type": "numeric",
+          "nullable": false
+        },
+        {
+          "name": "setpoint",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "target_low",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "target_high",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "drift_margin",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "unit",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "measured_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "environment_readings",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "primaryKey": true
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "metric",
+          "type": "public.metric_kind",
+          "nullable": false,
+          "enum": [
+            "temp",
+            "rh",
+            "co2",
+            "vwc",
+            "ec",
+            "rzt"
+          ]
+        },
+        {
+          "name": "value",
+          "type": "numeric",
+          "nullable": false
+        },
+        {
+          "name": "measured_at",
+          "type": "timestamp with time zone",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "harvest_cycles",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "harvest_year",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "strain",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": true
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": true
+        },
+        {
+          "name": "status",
+          "type": "public.cycle_status",
+          "nullable": false,
+          "default": "current",
+          "enum": [
+            "current",
+            "complete"
+          ]
+        },
+        {
+          "name": "day_count",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "harvest_reports",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "cycle_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "harvest_cycles.id"
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "cycle",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "harvested_on",
+          "type": "date",
+          "nullable": true
+        },
+        {
+          "name": "plants",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "wet_weight",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "dry_weight",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "per_plant",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "note",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "leachate_log",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "cycle_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "harvest_cycles.id"
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "capture_date",
+          "type": "date",
+          "nullable": false
+        },
+        {
+          "name": "stage",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "duration",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "strain",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "ph",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "ec",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "volume_ml",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "pct_p1",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "saved_by",
+          "type": "uuid",
+          "nullable": true
+        },
+        {
+          "name": "saved_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "profiles",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "primaryKey": true
+        },
+        {
+          "name": "full_name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "nullable": false,
+          "default": "staff"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "nullable": false,
+          "default": true
+        },
+        {
+          "name": "created_by",
+          "type": "uuid",
+          "nullable": true,
+          "references": "profiles.id"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "revenue_reports",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "cycle_id",
+          "type": "uuid",
+          "nullable": true,
+          "references": "harvest_cycles.id"
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "harvest_year",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "generated_on",
+          "type": "date",
+          "nullable": true
+        },
+        {
+          "name": "headline",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "summary",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "stats",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "recommendations",
+          "type": "jsonb",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "rooms",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "key",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "stage",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "cultivar",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "aroya_room_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "aroya_zone_id",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "sort_order",
+          "type": "integer",
+          "nullable": false,
+          "default": 0
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "rootzone_current",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "metric",
+          "type": "public.metric_kind",
+          "nullable": false,
+          "enum": [
+            "temp",
+            "rh",
+            "co2",
+            "vwc",
+            "ec",
+            "rzt"
+          ]
+        },
+        {
+          "name": "value",
+          "type": "numeric",
+          "nullable": false
+        },
+        {
+          "name": "target_low",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "target_high",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "drift_margin",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "unit",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "measured_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "rootzone_readings",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "bigint",
+          "nullable": false,
+          "primaryKey": true
+        },
+        {
+          "name": "room_id",
+          "type": "uuid",
+          "nullable": false,
+          "references": "rooms.id"
+        },
+        {
+          "name": "metric",
+          "type": "public.metric_kind",
+          "nullable": false,
+          "enum": [
+            "temp",
+            "rh",
+            "co2",
+            "vwc",
+            "ec",
+            "rzt"
+          ]
+        },
+        {
+          "name": "value",
+          "type": "numeric",
+          "nullable": false
+        },
+        {
+          "name": "lights_on",
+          "type": "boolean",
+          "nullable": true
+        },
+        {
+          "name": "measured_at",
+          "type": "timestamp with time zone",
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "team_invites",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": "gen_random_uuid()",
+          "primaryKey": true
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false
+        },
+        {
+          "name": "full_name",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "role",
+          "type": "public.user_role",
+          "nullable": false,
+          "default": "staff",
+          "enum": [
+            "admin",
+            "staff"
+          ]
+        },
+        {
+          "name": "invited_by",
+          "type": "uuid",
+          "nullable": true,
+          "references": "app_users.id"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "nullable": false,
+          "default": "pending"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "is_admin",
+      "args": []
+    },
+    {
+      "name": "is_member",
+      "args": []
+    }
+  ]
+}

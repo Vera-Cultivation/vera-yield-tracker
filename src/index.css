@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --vb: #0a0a0a;
+  --vnav: rgba(13, 13, 13, 0.85);
+  --vcard: rgba(17, 24, 39, 0.75);
+  --vtile: rgba(10, 10, 10, 0.45);
+  --vbd: rgba(255, 255, 255, 0.08);
+  --vbd2: rgba(255, 255, 255, 0.12);
+  --vsoft: rgba(255, 255, 255, 0.04);
+  --vsoft2: rgba(255, 255, 255, 0.08);
+  --vt1: #f8fafc;
+  --vt2: #cbd5e1;
+  --vt3: #94a3b8;
+  --vt4: #64748b;
+  --vaccent: #10b981;
+  --vcyan: #22d3ee;
+  --vamber: #fbbf24;
+  --vcoral: #fb7185;
+  --vgrid: 0.04;
+  --vpop: #111827;
+  --vshadow: 0 0 0 1px rgba(16, 185, 129, 0.08), 0 25px 50px -12px rgba(16, 185, 129, 0.1);
+}
+
+[data-vtheme="light"] {
+  --vb: #f4f7f5;
+  --vnav: rgba(255, 255, 255, 0.88);
+  --vcard: rgba(255, 255, 255, 0.92);
+  --vtile: rgba(236, 243, 239, 0.95);
+  --vbd: rgba(6, 32, 24, 0.1);
+  --vbd2: rgba(6, 32, 24, 0.18);
+  --vsoft: rgba(6, 32, 24, 0.04);
+  --vsoft2: rgba(6, 32, 24, 0.08);
+  --vt1: #08211a;
+  --vt2: #2d403a;
+  --vt3: #45554e;
+  --vt4: #59685f;
+  --vaccent: #047857;
+  --vcyan: #0e7490;
+  --vamber: #b45309;
+  --vcoral: #be123c;
+  --vgrid: 0.08;
+  --vpop: #ffffff;
+  --vshadow: 0 0 0 1px rgba(16, 185, 129, 0.1), 0 20px 40px -20px rgba(6, 32, 24, 0.22);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--vb);
+}
+
+body {
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--vt1);
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01", "ss03";
+}
+
+a {
+  color: #22d3ee;
+  text-decoration: none;
+}
+a:hover {
+  color: #10b981;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748b;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.grad-text {
+  background: linear-gradient(135deg, #10b981, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media print {
+  [data-noprint],
+  header {
+    display: none !important;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
