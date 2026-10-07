@@ -350,10 +350,14 @@ async function allRows(query) {
 }
 
 /** Readings for one room over the last `hours`, averaged into `bucketMin` buckets: [{ ts, temp, rh, co2, vwc, ec, rzt }] */
-export async function loadRoomSeries(roomId, hours = 72, bucketMin = 15) {
-  const since = new Date(Date.now() - hours * 3600000).toISOString();
-  const read = (table) => () =>
-    supabase.from(table).select("metric, value, measured_at").eq("room_id", roomId).gte("measured_at", since).order("measured_at");
+export async function loadRoomSeries(roomId, hours = 72, bucketMin = 15, untilMs = null) {
+  const end = untilMs ?? Date.now();
+  const since = new Date(end - hours * 3600000).toISOString();
+  const read = (table) => () => {
+    let q = supabase.from(table).select("metric, value, measured_at").eq("room_id", roomId).gte("measured_at", since);
+    if (untilMs != null) q = q.lte("measured_at", new Date(untilMs).toISOString());
+    return q.order("measured_at");
+  };
   const rows = (await Promise.all([allRows(read("environment_readings")), allRows(read("rootzone_readings"))])).flat();
 
   const size = bucketMin * 60000;

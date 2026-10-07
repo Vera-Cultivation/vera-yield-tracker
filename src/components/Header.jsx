@@ -87,7 +87,6 @@ export default function Header({ theme, onToggleTheme, user, isAdmin, current, o
       </nav>
 
       <div className="ml-auto flex flex-wrap items-center gap-2.5">
-        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         <Clock />
         <div className="relative">
           <button
