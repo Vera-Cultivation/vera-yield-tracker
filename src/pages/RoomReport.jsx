@@ -1,6 +1,5 @@
 import CyclePicker from "../components/CyclePicker";
 import { cx, I, Icon, StatusBadge } from "../components/ui";
-import { PRICE_PER_GRAM } from "../lib/config";
 import { avgOf, dailyRecord, fmt, mean, num, reportFor, roomStatus, tone, tones } from "../lib/logic";
 import { aiStamp, closedTone, RecList, useCycleStats } from "./Reports";
 
@@ -125,15 +124,6 @@ export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYe
           </div>
         </div>
         <div className="h-px bg-[linear-gradient(90deg,transparent,rgba(16,185,129,0.3),transparent)]" />
-        <div className="grid grid-cols-3 gap-3">
-          {R.kpis.map(([l, v, s]) => (
-            <div key={l} className="rounded-[20px] border border-vbd bg-vtile p-[18px]">
-              <div className={cx.label}>{l}</div>
-              <div className="tnum mt-2 text-[30px] font-extrabold leading-none tracking-[-0.03em]">{v}</div>
-              <div className="mt-1.5 text-xs text-vt4">{s}</div>
-            </div>
-          ))}
-        </div>
         <div className="rounded-[22px] border border-[rgba(16,185,129,0.22)] bg-[linear-gradient(160deg,rgba(16,185,129,0.08),transparent_70%)] p-6">
           <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-vaccent">Summary</div>
           {R.headline && <div className="mt-2.5 text-2xl font-bold leading-[1.3] tracking-[-0.02em]">{R.headline}</div>}
@@ -148,9 +138,8 @@ export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYe
           <div className={cx.label}>Recommendations</div>
           <RecList recs={R.recs} T={T} big />
         </div>
-        <div className="flex flex-wrap justify-between gap-3 border-t border-vbd pt-[18px] text-xs text-vt4">
+        <div className="border-t border-vbd pt-[18px] text-xs text-vt4">
           <span>Built by Claude from SkySpark, Aroya and leachate data · EAH Enterprises, LLC</span>
-          <span>Revenue at ${PRICE_PER_GRAM.toFixed(2)}/g wholesale</span>
         </div>
       </article>
     </main>

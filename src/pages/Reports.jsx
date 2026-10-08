@@ -1,8 +1,7 @@
 import CyclePicker from "../components/CyclePicker";
 import { AdminBadge, cx, I, Icon, StatusBadge } from "../components/ui";
 import * as api from "../lib/api";
-import { PRICE_PER_GRAM } from "../lib/config";
-import { dailyRecord, harvestOf, isoDay, kgOf, money, priorityTone, reportFor, roomStatus, stampLabel, tone, tones, useAsync } from "../lib/logic";
+import { dailyRecord, isoDay, priorityTone, reportFor, roomStatus, stampLabel, tone, tones, useAsync } from "../lib/logic";
 
 export const closedTone = { color: "var(--vt3)", border: "var(--vbd2)", tint: "transparent", statusLabel: "Closed cycle" };
 
@@ -58,24 +57,6 @@ export default function Reports({ rooms, theme, cycles, year, cycle, onYear, onC
     return { r, i, R, rg, days, t: cy.current ? tone(T, roomStatus(r).s) : closedTone };
   });
 
-  const flower = rooms.filter((r) => !r.veg);
-  const kgIn = (c) => flower.map((r) => kgOf(harvestOf(harvests, r.id, c.key))).filter((v) => v != null);
-  const revOf = (c) => {
-    const kgs = kgIn(c);
-    return kgs.length ? money(kgs.reduce((a, b) => a + b, 0) * 1000 * PRICE_PER_GRAM) : "—";
-  };
-  const kgs = kgIn(cy);
-  const inRange = rooms.filter((r) => roomStatus(r).s === "green").length;
-  const price = "$" + PRICE_PER_GRAM.toFixed(2) + "/g";
-  const summary = [
-    { l: "Revenue · " + cy.name, v: revOf(cy), s: kgs.length + " of " + flower.length + " flower rooms harvested · " + price, c: "var(--vaccent)" },
-    { l: "Previous cycle revenue", v: prevCy ? revOf(prevCy) : "—", s: prevCy ? prevCy.name : "first cycle on record", c: "var(--vt1)" },
-    { l: "Dry yield", v: kgs.length ? kgs.reduce((a, b) => a + b, 0).toFixed(1) + " kg" : "—", s: "from harvest records", c: "var(--vt1)" },
-    cy.current
-      ? { l: "Rooms in range", v: inRange + "/" + rooms.length, s: "right now", c: inRange === rooms.length ? "var(--vaccent)" : "var(--vamber)" }
-      : { l: "Days in cycle", v: String(cy.days), s: cy.range, c: "var(--vt1)" },
-  ];
-
   return (
     <main className={cx.main}>
       <div className="flex flex-wrap items-end justify-between gap-6">
@@ -112,18 +93,6 @@ export default function Reports({ rooms, theme, cycles, year, cycle, onYear, onC
         <div className="mt-5 rounded-[14px] border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.10)] px-4 py-3 text-sm">Couldn't load readings: {statsQ.error}</div>
       )}
 
-      <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-4">
-        {summary.map((s) => (
-          <div key={s.l} className={cx.card + " px-6 py-[22px]"}>
-            <div className={cx.label}>{s.l}</div>
-            <div className="tnum mt-2.5 text-4xl font-extrabold leading-none tracking-[-0.03em]" style={{ color: s.c }}>
-              {s.v}
-            </div>
-            <div className="mt-2 text-[13px] text-vt4">{s.s}</div>
-          </div>
-        ))}
-      </div>
-
       <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(100%,620px),1fr))] gap-6">
         {reports.map(({ r, i, R, rg, days, t }) => (
           <div key={r.id} className={cx.card + " flex flex-col gap-[22px] p-7 transition-all duration-300 hover:!border-[rgba(16,185,129,0.3)]"}>
@@ -133,15 +102,6 @@ export default function Reports({ rooms, theme, cycles, year, cycle, onYear, onC
                 <div className="mt-1.5 text-sm text-vt3">{cy.current ? r.stage : cy.name}</div>
               </div>
               <StatusBadge t={t} small />
-            </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              {R.kpis.map(([l, v, s]) => (
-                <div key={l} className="rounded-[18px] border border-vbd bg-vtile p-4">
-                  <div className={cx.label}>{l}</div>
-                  <div className="tnum mt-2 text-[26px] font-extrabold leading-none tracking-[-0.03em]">{v}</div>
-                  <div className="mt-1.5 text-xs text-vt4">{s}</div>
-                </div>
-              ))}
             </div>
             <div className="rounded-[20px] border border-[rgba(16,185,129,0.22)] bg-[linear-gradient(160deg,rgba(16,185,129,0.08),transparent_70%)] p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
