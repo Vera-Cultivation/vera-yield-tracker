@@ -450,7 +450,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
                 <div className="mt-[18px] text-[15px] leading-relaxed text-vt2">{H.notes || "No harvest notes."}</div>
               </>
             ) : (
-              <div className="mt-[18px] text-[15px] leading-relaxed text-vt3">No harvest recorded for this room in the selected range. Admins add harvests in the Supabase harvests table.</div>
+              <div className="mt-[18px] text-[15px] leading-relaxed text-vt3">No harvest recorded for this room in the selected range. Admins add harvests in the Supabase harvest_reports table.</div>
             )}
           </div>
         </div>

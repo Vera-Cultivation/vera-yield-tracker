@@ -118,7 +118,7 @@ export async function checkConnection() {
   const { error } = await supabase.auth.getSession();
   if (error) return error.message;
   try {
-    const res = await fetch(import.meta.env.VITE_SUPABASE_URL + "/auth/v1/health", {
+    const res = await fetch(import.meta.env.VITE_SUPABASE_URL.replace(/\/+$/, "") + "/auth/v1/health", {
       headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
     });
     return res.ok ? null : "Supabase answered " + res.status + " " + res.statusText;

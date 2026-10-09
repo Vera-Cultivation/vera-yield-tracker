@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { cx, I, Icon, Pill } from "../components/ui";
-import { fdate, pad2, tones } from "../lib/logic";
+import { captureDay, fdate, pad2, tones } from "../lib/logic";
 
 const EMPTY = { date: "", stage: "", dur: "", strain: "", ph: "", ec: "", vol: "", p1: "", notes: "" };
 const blankRows = () => [{ ...EMPTY }, { ...EMPTY }, { ...EMPTY }];
@@ -24,7 +24,8 @@ const RNG = { ph: [3, 9], ec: [0, 20], vol: [0, 5000], p1: [0, 100] };
 const num = (v) => Number(String(v).replace(/\+/g, "").replace(/%/g, "").trim());
 function bad(k, v) {
   if (v === "" || v == null || ["notes", "dur", "strain", "stage"].includes(k)) return false;
-  if (k === "date") return !/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(v) && !/^\d{4}-\d{2}-\d{2}$/.test(v);
+  // Same parser the save uses, so a date that shows as valid can always be stored.
+  if (k === "date") return captureDay(v) == null;
   const n = num(v);
   return isNaN(n) || n < RNG[k][0] || n > RNG[k][1];
 }
@@ -357,7 +358,7 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
                   Add rows to {cycles[openCycle].name}
                 </button>
               ) : (
-                <span className="text-vt4">No cycle is open — leave end_date empty on a cycle to accept entries.</span>
+                <span className="text-vt4">No cycle is running. An admin can start one in Settings to accept entries.</span>
               )}
             </div>
           </>
