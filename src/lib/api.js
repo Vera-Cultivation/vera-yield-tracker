@@ -444,6 +444,18 @@ export async function insertLeachate(rows, cy, user) {
   return data.map(fromLeach);
 }
 
+/** Edits one saved row's capture fields; cycle, room and who saved it stay as they were. */
+export async function updateLeachate(id, r) {
+  const changes = toLeach(r, null, {});
+  delete changes.cycle_id;
+  delete changes.room_id;
+  delete changes.saved_by;
+  const { data, error } = await supabase.from("leachate_log").update(changes).eq("id", id).select();
+  fail(error);
+  if (!data.length) throw new Error("Supabase didn't allow the update. Run the leachate_log update policy in supabase/policies.sql.");
+  return fromLeach(data[0]);
+}
+
 /* ------------------------------------------------------------- crop_reports */
 /** Latest Claude report per room + cycle: { "<roomId>|<cycleKey>": { headline, text, recs, generatedAt } } */
 export async function loadReports() {

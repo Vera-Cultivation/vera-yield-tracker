@@ -22,6 +22,8 @@ create policy "team can read" on public.crop_reports         for select to authe
 
 -- Staff and admins add leachate captures (Data Entry).
 create policy "team can add" on public.leachate_log for insert to authenticated with check (public.is_member());
+-- ...and correct rows already saved (Data Entry → Recently saved → Update).
+create policy "team can update" on public.leachate_log for update to authenticated using (public.is_member()) with check (public.is_member());
 
 -- Admins save AI reports.
 create policy "admins can add" on public.crop_reports for insert to authenticated with check (public.is_admin());
