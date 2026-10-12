@@ -118,7 +118,7 @@ export async function checkConnection() {
   const { error } = await supabase.auth.getSession();
   if (error) return error.message;
   try {
-    const res = await fetch(import.meta.env.VITE_SUPABASE_URL + "/auth/v1/health", {
+    const res = await fetch(import.meta.env.VITE_SUPABASE_URL.replace(/\/+$/, "") + "/auth/v1/health", {
       headers: { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY },
     });
     return res.ok ? null : "Supabase answered " + res.status + " " + res.statusText;
@@ -350,10 +350,14 @@ async function allRows(query) {
 }
 
 /** Readings for one room over the last `hours`, averaged into `bucketMin` buckets: [{ ts, temp, rh, co2, vwc, ec, rzt }] */
-export async function loadRoomSeries(roomId, hours = 72, bucketMin = 15) {
-  const since = new Date(Date.now() - hours * 3600000).toISOString();
-  const read = (table) => () =>
-    supabase.from(table).select("metric, value, measured_at").eq("room_id", roomId).gte("measured_at", since).order("measured_at");
+export async function loadRoomSeries(roomId, hours = 72, bucketMin = 15, untilMs = null) {
+  const end = untilMs ?? Date.now();
+  const since = new Date(end - hours * 3600000).toISOString();
+  const read = (table) => () => {
+    let q = supabase.from(table).select("metric, value, measured_at").eq("room_id", roomId).gte("measured_at", since);
+    if (untilMs != null) q = q.lte("measured_at", new Date(untilMs).toISOString());
+    return q.order("measured_at");
+  };
   const rows = (await Promise.all([allRows(read("environment_readings")), allRows(read("rootzone_readings"))])).flat();
 
   const size = bucketMin * 60000;
@@ -438,6 +442,18 @@ export async function insertLeachate(rows, cy, user) {
     .select();
   fail(error);
   return data.map(fromLeach);
+}
+
+/** Edits one saved row's capture fields; cycle, room and who saved it stay as they were. */
+export async function updateLeachate(id, r) {
+  const changes = toLeach(r, null, {});
+  delete changes.cycle_id;
+  delete changes.room_id;
+  delete changes.saved_by;
+  const { data, error } = await supabase.from("leachate_log").update(changes).eq("id", id).select();
+  fail(error);
+  if (!data.length) throw new Error("Supabase didn't allow the update. Run the leachate_log update policy in supabase/policies.sql.");
+  return fromLeach(data[0]);
 }
 
 /* ------------------------------------------------------------- crop_reports */

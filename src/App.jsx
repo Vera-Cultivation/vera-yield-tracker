@@ -224,6 +224,10 @@ export default function App() {
     const added = await api.insertLeachate(rows, cy, user);
     setSaved((s) => [...added, ...s]);
   };
+  const updateLeachate = async (id, row) => {
+    const next = await api.updateLeachate(id, row);
+    setSaved((s) => s.map((x) => (x.id === id ? next : x)));
+  };
 
   /* harvest cycles (Settings) — reload everything, since harvests, leachate and reports map onto cycles */
   const createCycle = async (c) => {
@@ -388,7 +392,7 @@ export default function App() {
       />
     );
   else if (scr === "harvests") body = <Harvests rooms={rooms} theme={theme} cycles={cycles} defaultCycle={defaultCycle} harvests={harvests} saved={savedRows} />;
-  else if (scr === "entry") body = <DataEntry rooms={rooms} theme={theme} cycles={cycles} openCycle={openCycle} saved={savedRows} onSave={saveLeachate} />;
+  else if (scr === "entry") body = <DataEntry rooms={rooms} theme={theme} cycles={cycles} openCycle={openCycle} saved={savedRows} onSave={saveLeachate} onUpdate={updateLeachate} />;
 
   return shell(
     <>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { cx, I, Icon, Pill } from "../components/ui";
-import { fdate, pad2, tones } from "../lib/logic";
+import { captureDay, fdate, pad2, tones } from "../lib/logic";
 
 const EMPTY = { date: "", stage: "", dur: "", strain: "", ph: "", ec: "", vol: "", p1: "", notes: "" };
 const blankRows = () => [{ ...EMPTY }, { ...EMPTY }, { ...EMPTY }];
@@ -24,7 +24,8 @@ const RNG = { ph: [3, 9], ec: [0, 20], vol: [0, 5000], p1: [0, 100] };
 const num = (v) => Number(String(v).replace(/\+/g, "").replace(/%/g, "").trim());
 function bad(k, v) {
   if (v === "" || v == null || ["notes", "dur", "strain", "stage"].includes(k)) return false;
-  if (k === "date") return !/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(v) && !/^\d{4}-\d{2}-\d{2}$/.test(v);
+  // Same parser the save uses, so a date that shows as valid can always be stored.
+  if (k === "date") return captureDay(v) == null;
   const n = num(v);
   return isNaN(n) || n < RNG[k][0] || n > RNG[k][1];
 }
@@ -45,7 +46,7 @@ const fmtAt = (iso) => {
   return fdate(d) + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
 };
 
-export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSave }) {
+export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSave, onUpdate }) {
   const light = theme === "light";
   const T = tones(theme);
   const [eCycle, setECycle] = useState(openCycle >= 0 ? openCycle : cycles.length - 1);
@@ -56,6 +57,12 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
   const [toast, setToast] = useState("");
   const [toastErr, setToastErr] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [editRow, setEditRow] = useState(EMPTY);
+  const [updating, setUpdating] = useState(false);
+  const [editErr, setEditErr] = useState("");
+  const [editIn, setEditIn] = useState("saved"); // which table the row is being edited in
+  const [showRoom, setShowRoom] = useState(false);
   const toastTimer = useRef(null);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
@@ -87,6 +94,32 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
       flash("Couldn't save: " + e.message, true);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const startEdit = (sv, where = "saved") => {
+    setEditId(sv.id);
+    setEditIn(where);
+    setEditErr("");
+    setEditRow({ ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map((k) => [k, sv[k] || ""])) });
+  };
+  const editOk = rowValid(editRow);
+  const update = async () => {
+    if (updating) return;
+    if (!editOk) {
+      setEditErr("Check the values: Date and Strain are required, and red fields are out of range.");
+      return;
+    }
+    setUpdating(true);
+    setEditErr("");
+    try {
+      await onUpdate(editId, editRow);
+      setEditId(null);
+      flash("Updated row in leachate_log");
+    } catch (e) {
+      setEditErr("Couldn't update: " + e.message);
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -131,10 +164,38 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
           bg: "transparent",
         }));
 
-  const editCols = "grid-cols-[36px_110px_64px_180px_150px_76px_76px_100px_110px_minmax(260px,2fr)_40px]";
+  // Current cycle: everything already saved for the selected room ("View Room data").
+  const roomRows = saved.filter((x) => x.cycleKey === ecy.key && x.roomId === room.id);
+
+  const closeRoom = () => {
+    setShowRoom(false);
+    if (editIn === "room") setEditId(null);
+  };
+
+  const editCols ="grid-cols-[36px_110px_64px_180px_150px_76px_76px_100px_110px_minmax(260px,2fr)_40px]";
   const viewCols = "grid-cols-[110px_64px_170px_150px_76px_76px_100px_110px_minmax(260px,2fr)]";
-  const savedCols = "grid-cols-[130px_100px_90px_60px_130px_70px_70px_90px_90px_minmax(0,1.8fr)_130px]";
+  const savedCols = "grid-cols-[130px_100px_90px_60px_130px_70px_70px_90px_90px_minmax(0,1.8fr)_130px_150px]";
+  const roomCols = "grid-cols-[110px_64px_170px_150px_76px_76px_100px_110px_minmax(260px,2fr)_150px]";
   const savedRows = saved.slice(0, 12);
+  const editBtns = (
+    <span className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={update}
+        className="whitespace-nowrap rounded-full border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.08)] px-3 py-1.5 text-[12px] font-semibold text-vaccent hover:bg-[rgba(16,185,129,0.16)]"
+        style={{ opacity: editOk && !updating ? 1 : 0.45 }}
+      >
+        {updating ? "Saving…" : "Save"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setEditId(null)}
+        className="whitespace-nowrap rounded-full border border-vbd2 px-3 py-1.5 text-[12px] font-semibold text-vt3 hover:text-vt1"
+      >
+        Cancel
+      </button>
+    </span>
+  );
 
   return (
     <main className={cx.main}>
@@ -214,6 +275,10 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
           </div>
           {eOpen && (
             <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setShowRoom(true)} className={cx.btnGhost}>
+                <Icon d={I.eye} />
+                View All Data
+              </button>
               <button type="button" onClick={() => setPasteOpen((o) => !o)} className={cx.btnGhost}>
                 <Icon d={I.clipboard} />
                 Paste From Sheet
@@ -357,7 +422,7 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
                   Add rows to {cycles[openCycle].name}
                 </button>
               ) : (
-                <span className="text-vt4">No cycle is open — leave end_date empty on a cycle to accept entries.</span>
+                <span className="text-vt4">No cycle is running. An admin can start one in Settings to accept entries.</span>
               )}
             </div>
           </>
@@ -375,7 +440,7 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
           <div className="px-6 py-10 text-center text-[15px] text-vt3">Nothing saved yet. Rows you save will show up here and in Harvests.</div>
         ) : (
           <div className="overflow-x-auto">
-            <div className="min-w-[1260px]">
+            <div className="min-w-[1420px]">
               <div className={"grid gap-2.5 border-b border-vbd px-6 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-vt3 " + savedCols}>
                 <span>Saved</span>
                 <span>Room</span>
@@ -388,8 +453,49 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
                 <span>% of P1</span>
                 <span>Capture Notes</span>
                 <span>By</span>
+                <span />
               </div>
-              {savedRows.map((sv) => (
+              {savedRows.map((sv) =>
+                sv.id === editId && editIn === "saved" ? (
+                  <div key={sv.id} className="border-b border-vbd bg-vsoft">
+                  <div className={"tnum grid items-center gap-2.5 px-6 py-2.5 text-sm " + savedCols}>
+                    <span className="text-[13px] text-vt3">{sv.createdAt ? fmtAt(sv.createdAt) : ""}</span>
+                    <span>{(rooms.find((r) => r.id === sv.roomId) || {}).name || sv.roomId}</span>
+                    {["date", "stage", "strain", "ph", "ec", "vol", "p1", "notes"].map((k) => (
+                      <input
+                        key={k}
+                        value={editRow[k] || ""}
+                        onChange={(e) => setEditRow((r) => ({ ...r, [k]: e.target.value }))}
+                        placeholder={(COLS.find((c) => c[0] === k) || [])[1]}
+                        className={
+                          "w-full min-w-0 rounded-xl border bg-vtile px-2.5 py-2 text-sm text-vt1 outline-none focus:!border-[rgba(16,185,129,0.5)] focus:shadow-[0_0_0_3px_rgba(16,185,129,0.14)] " +
+                          (MONO.includes(k) ? "font-mono" : "")
+                        }
+                        style={{ borderColor: bad(k, editRow[k]) ? T.red[1] : "var(--vbd)" }}
+                      />
+                    ))}
+                    <span className="text-vt2">{sv.by}</span>
+                    <span className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={update}
+                        className="whitespace-nowrap rounded-full border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.08)] px-3 py-1.5 text-[12px] font-semibold text-vaccent hover:bg-[rgba(16,185,129,0.16)]"
+                        style={{ opacity: editOk && !updating ? 1 : 0.45 }}
+                      >
+                        {updating ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditId(null)}
+                        className="whitespace-nowrap rounded-full border border-vbd2 px-3 py-1.5 text-[12px] font-semibold text-vt3 hover:text-vt1"
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  </div>
+                  {editErr && <div className="px-6 pb-3 text-[13px] font-semibold text-[#ef4444]">{editErr}</div>}
+                  </div>
+                ) : (
                 <div key={sv.id} className={"tnum grid items-center gap-2.5 border-b border-vbd px-6 py-3 text-sm hover:bg-vsoft " + savedCols}>
                   <span className="text-[13px] text-vt3">{sv.createdAt ? fmtAt(sv.createdAt) : ""}</span>
                   <span>{(rooms.find((r) => r.id === sv.roomId) || {}).name || sv.roomId}</span>
@@ -402,12 +508,103 @@ export default function DataEntry({ rooms, theme, cycles, openCycle, saved, onSa
                   <span>{fmtP1(sv.p1)}</span>
                   <span className="text-vt3">{sv.notes || "—"}</span>
                   <span className="text-vt2">{sv.by}</span>
+                  <span>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(sv)}
+                      className="whitespace-nowrap rounded-full border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.08)] px-3 py-1.5 text-[12px] font-semibold text-vaccent hover:bg-[rgba(16,185,129,0.16)]"
+                    >
+                      Update
+                    </button>
+                  </span>
                 </div>
-              ))}
+                )
+              )}
             </div>
           </div>
         )}
       </div>
+      {eOpen && showRoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={closeRoom}>
+          <div className={cx.card + " flex max-h-[85vh] w-full max-w-[1560px] flex-col overflow-hidden bg-vcard"} onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-vbd px-6 py-5">
+              <div>
+                <div className="text-lg font-bold">{room.name} · All Data</div>
+                <div className="mt-1 text-[13px] text-vt3">{ecy.name + " · " + roomRows.length + (roomRows.length === 1 ? " row" : " rows") + " in leachate_log"}</div>
+              </div>
+              <button
+                type="button"
+                title="Close"
+                onClick={closeRoom}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-vbd2 bg-transparent text-vt3 hover:text-vt1"
+              >
+                <Icon d={I.x} size={15} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto">
+              <div className="min-w-[1480px]">
+                <div className={"grid items-end gap-2.5 border-b border-vbd px-6 py-3 text-[10px] font-bold uppercase leading-[1.35] tracking-[0.12em] text-vt3 " + roomCols}>
+                  <span>Date</span>
+                  <span>Stage</span>
+                  <span>Duration of Capture</span>
+                  <span>Strain</span>
+                  <span>pH</span>
+                  <span>EC</span>
+                  <span>Volume (mL)</span>
+                  <span>% of P1 Irrigation Vol</span>
+                  <span>Capture Notes &amp; Irrigation Schedule Updates</span>
+                  <span />
+                </div>
+                {!roomRows.length && <div className="px-6 py-10 text-center text-[15px] text-vt3">No leachate captures saved for {room.name} in {ecy.name} yet.</div>}
+                {roomRows.map((x) =>
+                  x.id === editId && editIn === "room" ? (
+                    <div key={x.id} className="border-t border-vbd bg-vsoft">
+                      <div className={"tnum grid items-center gap-2.5 px-6 py-2.5 text-sm " + roomCols}>
+                        {COLS.map(([k, ph]) => (
+                          <input
+                            key={k}
+                            value={editRow[k] || ""}
+                            onChange={(e) => setEditRow((r) => ({ ...r, [k]: e.target.value }))}
+                            placeholder={ph}
+                            className={
+                              "w-full min-w-0 rounded-xl border bg-vtile px-2.5 py-2 text-sm text-vt1 outline-none focus:!border-[rgba(16,185,129,0.5)] focus:shadow-[0_0_0_3px_rgba(16,185,129,0.14)] " +
+                              (MONO.includes(k) ? "font-mono" : "")
+                            }
+                            style={{ borderColor: bad(k, editRow[k]) ? T.red[1] : "var(--vbd)" }}
+                          />
+                        ))}
+                        {editBtns}
+                      </div>
+                      {editErr && <div className="px-6 pb-3 text-[13px] font-semibold text-[#ef4444]">{editErr}</div>}
+                    </div>
+                  ) : (
+                    <div key={x.id} className={"tnum grid items-center gap-2.5 border-t border-vbd px-6 py-[11px] text-sm hover:!bg-vsoft2 " + roomCols}>
+                      <span className="font-mono text-[13px] font-semibold">{x.date}</span>
+                      <span className="font-semibold">{x.stage || "—"}</span>
+                      <span className="text-[13px] text-vt2">{x.dur || "—"}</span>
+                      <span className="font-semibold">{x.strain || "—"}</span>
+                      <span className="font-mono">{x.ph || "—"}</span>
+                      <span className="font-mono">{x.ec || "—"}</span>
+                      <span className="font-mono">{x.vol || "—"}</span>
+                      <span className="font-mono">{fmtP1(x.p1)}</span>
+                      <span className="text-[13px] text-vt2">{x.notes || "—"}</span>
+                      <span>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(x, "room")}
+                          className="whitespace-nowrap rounded-full border border-[rgba(16,185,129,0.35)] bg-[rgba(16,185,129,0.08)] px-3 py-1.5 text-[12px] font-semibold text-vaccent hover:bg-[rgba(16,185,129,0.16)]"
+                        >
+                          Update
+                        </button>
+                      </span>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

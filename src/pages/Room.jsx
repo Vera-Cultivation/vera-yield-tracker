@@ -1,7 +1,7 @@
-import { useMemo } from "react";
-import { cx, Gauge, I, Icon, NoData, SourceBadge, SRC } from "../components/ui";
+import { useMemo, useState } from "react";
+import { cx, Gauge, I, Icon, NoData, Pill, SourceBadge, SRC } from "../components/ui";
 import * as api from "../lib/api";
-import { ENV_DEFS, RZ_DEFS, cycleName, fmt, fmtDay, gppOf, linePath, num, relativeTime, roomStatus, status, statusText, tone, tones, useAsync } from "../lib/logic";
+import { ENV_DEFS, RZ_DEFS, cycleName, fmt, fmtDay, gppOf, linePath, mean, num, relativeTime, roomStatus, status, statusText, tone, tones, useAsync } from "../lib/logic";
 
 const HOUR = 3600000;
 
@@ -17,18 +17,56 @@ function SectionHead({ n, title, children }) {
   );
 }
 
-/** Points of one metric inside the last `hours`, as { vals, xs } for linePath. */
-function windowed(series, k, hours, now) {
-  const start = now - hours * HOUR;
-  const pts = series.filter((p) => p[k] != null && new Date(p.ts).getTime() >= start);
-  return { vals: pts.map((p) => p[k]), xs: pts.map((p) => (new Date(p.ts).getTime() - start) / (hours * HOUR)) };
+/** Points of one metric inside [start, end], as { vals, xs } for linePath. */
+function windowed(series, k, start, end) {
+  const pts = series.filter((p) => {
+    const t = new Date(p.ts).getTime();
+    return p[k] != null && t >= start && t <= end;
+  });
+  return { vals: pts.map((p) => p[k]), xs: pts.map((p) => (new Date(p.ts).getTime() - start) / (end - start)) };
 }
 
-function EnvCard({ def, room, series, now, T, light }) {
+const RANGES = [
+  ["24h", "Last 24 hours"],
+  ["7d", "Last 7 days"],
+  ["custom", "Custom"],
+];
+const isoDay = (ms) => {
+  const d = new Date(ms);
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+};
+const shortDay = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+/** { start, end, label, live } for the selected range; custom days run from local midnight to end of day. */
+function rangeOf(mode, from, to) {
+  const now = Date.now();
+  if (mode === "7d") return { start: now - 7 * 24 * HOUR, end: now, label: "last 7 days", live: true };
+  if (mode === "custom" && from && to) {
+    const [a, b] = from <= to ? [from, to] : [to, from];
+    const start = new Date(a + "T00:00:00").getTime();
+    const end = Math.min(new Date(b + "T23:59:59.999").getTime(), now);
+    return { start, end, label: a === b ? shortDay(start) : shortDay(start) + " – " + shortDay(end), live: false };
+  }
+  return { start: now - 24 * HOUR, end: now, label: "last 24 hours", live: true };
+}
+
+/** `n` evenly spaced axis labels: relative (-24h … now) for live ranges, dates for custom ones. */
+function ticks(r, n) {
+  const span = r.end - r.start;
+  return Array.from({ length: n }, (_, i) => {
+    const t = r.start + (span * i) / (n - 1);
+    if (!r.live) return span <= 48 * HOUR ? new Date(t).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" }) : shortDay(t);
+    const ago = (r.end - t) / HOUR;
+    if (ago < 0.5) return "now";
+    return span <= 48 * HOUR ? "-" + Math.round(ago) + "h" : "-" + +(ago / 24).toFixed(1) + "d";
+  });
+}
+
+function EnvCard({ def, room, series, range, T, light }) {
   const [k, label, unit, dp, min, max] = def;
   const e = room.env[k];
   const t = tone(T, status(e[0], e[2], e[3], e[4]));
-  const w = windowed(series, k, 24, now);
+  const w = windowed(series, k, range.start, range.end);
   const yMin = Math.min(e[2] - e[4] * 2, ...w.vals);
   const yMax = Math.max(e[3] + e[4] * 2, ...w.vals);
   const H = 110;
@@ -88,15 +126,15 @@ function EnvCard({ def, room, series, now, T, light }) {
             />
             <path d={linePath(w.vals, 1000, H, yMin, yMax, w.xs)} fill="none" stroke={line} strokeWidth="2.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>
-          {!w.vals.length && <NoData>No SkySpark readings in the last 24h.</NoData>}
+          {!w.vals.length && <NoData>No SkySpark readings {(range.live ? "in the " : "for ") + range.label}.</NoData>}
         </div>
       </div>
       <div className="mt-1.5 grid grid-cols-[44px_minmax(0,1fr)] gap-2">
         <span />
         <div className="tnum flex justify-between text-[11px] text-vt4">
-          <span>-24h</span>
-          <span>-12h</span>
-          <span>now</span>
+          {ticks(range, 3).map((t, i) => (
+            <span key={i}>{t}</span>
+          ))}
         </div>
       </div>
     </div>
@@ -111,29 +149,52 @@ const lastTs = (series, k) => {
 export default function Room({ room, theme, isAdmin, saved, harvests, cycles, onBack, onOpenReport }) {
   const light = theme === "light";
   const T = tones(theme);
-  const rs = roomStatus(room);
+  // Time range for the page: last 24 hours, last 7 days, or a custom day range.
+  const [rangeMode, setRangeMode] = useState("24h");
+  const [customFrom, setCustomFrom] = useState(() => isoDay(Date.now() - 24 * HOUR));
+  const [customTo, setCustomTo] = useState(() => isoDay(Date.now()));
+  const range = useMemo(
+    () => rangeOf(rangeMode, customFrom, customTo),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rangeMode, customFrom, customTo, room.id, room.updatedAt]
+  );
+  const rangeHours = (range.end - range.start) / HOUR;
+  // ~300 points per chart, in whole 15-minute buckets
+  const bucketMin = Math.max(15, Math.ceil((rangeHours * 60) / 300 / 15) * 15);
+
+  const seriesQ = useAsync(() => api.loadRoomSeries(room.id, rangeHours, bucketMin, range.live ? null : range.end), [room.id, range]);
+  const series = seriesQ.data || [];
+
+  // Gauges and status show the average over the selected range (live values until the first load lands).
+  const view = useMemo(() => {
+    if (!seriesQ.data) return room;
+    const avg = (k) => mean(series.filter((p) => new Date(p.ts).getTime() >= range.start && new Date(p.ts).getTime() <= range.end).map((p) => p[k]));
+    const env = Object.fromEntries(Object.entries(room.env).map(([k, e]) => [k, [avg(k), ...e.slice(1)]]));
+    const rz = Object.fromEntries(Object.entries(room.rz).map(([k, z]) => [k, [avg(k), ...z.slice(1)]]));
+    return { ...room, env, rz };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room, seriesQ.data, range]);
+  const rs = roomStatus(view);
   const rt = tone(T, rs.s);
   const statusLine = statusText(rs, "All readings in range", "out of range");
 
-  const seriesQ = useAsync(() => api.loadRoomSeries(room.id, 72, 15), [room.id, room.updatedAt]);
-  const series = seriesQ.data || [];
-  const now = Date.now();
-
-  // 72h substrate chart
+  // Substrate chart over the selected range
   const chart = useMemo(() => {
     const path = (k, min, max) => {
-      const w = windowed(series, k, 72, now);
+      const w = windowed(series, k, range.start, range.end);
       return linePath(w.vals, 1000, 300, min, max, w.xs);
     };
     return { vwc: path("vwc", 0, 70), ec: path("ec", 0, 12), rzt: path("rzt", 55, 90) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [series]);
+  }, [series, range]);
   const hasRz = Boolean(chart.vwc || chart.ec || chart.rzt);
   const envSynced = lastTs(series, "temp") || room.updatedAt;
   const rzSynced = lastTs(series, "vwc") || room.updatedAt;
 
-  // Latest leachate capture (newest saved row for this room) and latest harvest.
-  const L = saved.find((x) => x.roomId === room.id) || null;
+  // Latest leachate capture (newest saved row for this room) and latest harvest, both inside the selected range.
+  const fromDay = isoDay(range.start);
+  const toDay = isoDay(range.end);
+  const inRange = (d) => Boolean(d) && String(d).slice(0, 10) >= fromDay && String(d).slice(0, 10) <= toDay;
+  const L = saved.find((x) => x.roomId === room.id && inRange(x.date)) || null;
   const ls = (v, lo, hi) => (v == null ? "var(--vt1)" : T[status(v, lo, hi, (hi - lo) * 0.5)][0]);
   const leachItems = L
     ? [
@@ -143,7 +204,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
         { label: "% of P1", value: L.p1 ? (String(L.p1).includes("%") ? L.p1 : L.p1 + "%") : "—", sub: "irrigation vol", color: light ? "#08211a" : "#f8fafc" },
       ]
     : [];
-  const H = harvests.filter((h) => h.roomId === room.id).slice(-1)[0] || null;
+  const H = harvests.filter((h) => h.roomId === room.id && inRange(h.date)).slice(-1)[0] || null;
   const g = gppOf(H);
   const harvestItems = H
     ? [
@@ -171,6 +232,37 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
           <div className="mt-3 text-[17px] text-vt3">{[room.stage, room.cultivar].filter(Boolean).join(" · ")}</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {RANGES.map(([m, l]) => (
+              <Pill key={m} active={rangeMode === m} light={light} onClick={() => setRangeMode(m)}>
+                {l}
+              </Pill>
+            ))}
+            {rangeMode === "custom" && (
+              <>
+                <input
+                  type="date"
+                  value={customFrom}
+                  max={customTo || isoDay(Date.now())}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className={cx.input + " tnum !w-auto !py-2 !text-sm"}
+                  style={{ colorScheme: light ? "light" : "dark" }}
+                  aria-label="From date"
+                />
+                <span className="text-sm text-vt4">to</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  min={customFrom}
+                  max={isoDay(Date.now())}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className={cx.input + " tnum !w-auto !py-2 !text-sm"}
+                  style={{ colorScheme: light ? "light" : "dark" }}
+                  aria-label="To date"
+                />
+              </>
+            )}
+          </div>
           {isAdmin && (
             <button type="button" onClick={onOpenReport} className={cx.btnPrimary + " flex items-center gap-2 py-[13px] text-[15px]"}>
               <Icon d={I.ai} />
@@ -199,7 +291,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
         </SectionHead>
         <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5">
           {ENV_DEFS.map((def) => (
-            <EnvCard key={def[0]} def={def} room={room} series={series} now={now} T={T} light={light} />
+            <EnvCard key={def[0]} def={def} room={view} series={series} range={range} T={T} light={light} />
           ))}
         </div>
         <div className="mt-4 flex flex-wrap gap-[18px] text-xs text-vt3">
@@ -223,7 +315,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
         <div className="mt-6 grid grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-stretch gap-6">
           <div className="flex flex-col gap-3.5">
             {RZ_DEFS.map(([k, label, unit, dp, min, max]) => {
-              const z = room.rz[k];
+              const z = view.rz[k];
               const t = tone(T, status(z[0], z[1], z[2], z[3]));
               return (
                 <div key={k} className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-4 rounded-[22px] border border-vbd bg-vtile px-[18px] py-4">
@@ -256,7 +348,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
 
           <div className="flex min-w-0 flex-col rounded-[22px] border border-vbd bg-vtile p-[22px]">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-[15px] font-bold">Substrate · last 72 hours</div>
+              <div className="text-[15px] font-bold">Substrate · {range.label}</div>
               <div className="flex flex-wrap gap-4 text-[13px]">
                 {[
                   ["#22d3ee", "VWC %"],
@@ -282,7 +374,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
                   <path d={chart.ec} fill="none" strokeWidth="2.2" style={{ stroke: "var(--vamber)" }} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                   <path d={chart.vwc} fill="none" strokeWidth="2.4" style={{ stroke: "var(--vcyan)" }} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                 </svg>
-                {!hasRz && <NoData>{seriesQ.loading ? "Loading readings…" : "No Aroya readings in the last 72h."}</NoData>}
+                {!hasRz && <NoData>{seriesQ.loading ? "Loading readings…" : "No Aroya readings " + (range.live ? "in the " : "for ") + range.label + "."}</NoData>}
               </div>
               <div className="flex flex-col justify-between font-mono text-[11px] text-vamber">
                 {["12", "8", "4", "0"].map((t) => (
@@ -293,8 +385,8 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
             <div className="mt-2 grid grid-cols-[40px_minmax(0,1fr)_40px] gap-2.5">
               <span />
               <div className="tnum flex justify-between text-[11px] text-vt4">
-                {["-72h", "-48h", "-24h", "now"].map((t) => (
-                  <span key={t}>{t}</span>
+                {ticks(range, 4).map((t, i) => (
+                  <span key={i}>{t}</span>
                 ))}
               </div>
               <span />
@@ -336,7 +428,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
                 <div className="mt-[18px] text-[15px] leading-relaxed text-vt2">{L.notes || "No capture notes."}</div>
               </>
             ) : (
-              <div className="mt-[18px] text-[15px] leading-relaxed text-vt3">No leachate captures for this room yet. Add them on the Data Entry screen.</div>
+              <div className="mt-[18px] text-[15px] leading-relaxed text-vt3">No leachate captures for this room in the selected range. Add them on the Data Entry screen.</div>
             )}
           </div>
           <div className="rounded-[22px] border border-vbd bg-vtile p-6">
@@ -358,7 +450,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
                 <div className="mt-[18px] text-[15px] leading-relaxed text-vt2">{H.notes || "No harvest notes."}</div>
               </>
             ) : (
-              <div className="mt-[18px] text-[15px] leading-relaxed text-vt3">No harvest recorded for this room yet. Admins add harvests in the Supabase harvests table.</div>
+              <div className="mt-[18px] text-[15px] leading-relaxed text-vt3">No harvest recorded for this room in the selected range. Admins add harvests in the Supabase harvest_reports table.</div>
             )}
           </div>
         </div>

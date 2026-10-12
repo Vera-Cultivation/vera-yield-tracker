@@ -137,14 +137,21 @@ export const fmtDay = (s) => {
   return fdate(d) + " " + d.getFullYear();
 };
 
-/** Leachate capture dates are typed as 9/29/26 or 2026-09-29. Returns YYYY-MM-DD or null. */
+/** Leachate capture dates are typed as 9/29/26, 9/29 (this year) or 2026-09-29. Returns YYYY-MM-DD, or null if it isn't a real date. */
 export function captureDay(s) {
   const t = String(s || "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
-  if (!m) return null;
-  const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
-  return y + "-" + pad2(m[1]) + "-" + pad2(m[2]);
+  let y, mo, d;
+  const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const us = t.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/);
+  if (iso) [, y, mo, d] = iso.map(Number);
+  else if (us) {
+    mo = Number(us[1]);
+    d = Number(us[2]);
+    y = us[3] == null ? new Date().getFullYear() : us[3].length === 2 ? 2000 + Number(us[3]) : Number(us[3]);
+  } else return null;
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null; // e.g. 2/30
+  return y + "-" + pad2(mo) + "-" + pad2(d);
 }
 
 /** "6.0 +" -> 6, "43%" -> 43, "" -> null */
