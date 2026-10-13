@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { AdminBadge, cx, Pill, tabStyle } from "../components/ui";
 import Targets from "./Targets";
-import { isoDay, tones } from "../lib/logic";
+import { cycleState, isoDay, tones } from "../lib/logic";
 
 const FAR = "9999-12-31";
-// Cycle names come from a fixed list so they stay consistent: at most 5 cycles a year.
-const CYCLE_NAMES = ["Cycle 1", "Cycle 2", "Cycle 3", "Cycle 4", "Cycle 5"];
+// Cycle names come from a fixed list so they stay consistent: Cycle 1 … Cycle 30 each year.
+// Several can run at once in different rooms (e.g. 26.10 in Room 4 and 26.11 in Room 5).
+const CYCLE_NAMES = Array.from({ length: 30 }, (_, i) => "Cycle " + (i + 1));
 const usedNames = (cycles, year, exceptKey) => cycles.filter((c) => c.year === Number(year) && c.key !== exceptKey).map((c) => c.label);
 const firstFree = (cycles, year) => CYCLE_NAMES.find((n) => !usedNames(cycles, year).includes(n)) || "";
 const today = () => isoDay(new Date());
@@ -30,15 +31,15 @@ function check({ name, year, startDate, endDate, roomIds, closing }, cycles, roo
   const others = cycles.filter((c) => c.key !== self?.key);
   if (others.some((c) => c.year === Number(year) && c.label.trim().toLowerCase() === name.trim().toLowerCase()))
     return `${year} already has a cycle called "${name.trim()}".`;
-  const fixedEnd = closing || (self && !self.current);
+  // Closed cycles end on their end date; open ones (running or scheduled) on the estimate, or today if that has passed.
+  const fixedEnd = closing || (self && !self.open);
   const mine = fixedEnd ? [startDate, endDate] : [startDate, endDate > today() ? endDate : today()];
+  // Any number of cycles can be open at once; a room just can't be in two at the same time.
   for (const roomId of roomIds) {
     const roomName = (rooms.find((r) => r.id === roomId) || {}).name || "A room";
     for (const c of others) {
       const row = c.rows.find((r) => r.roomId === roomId);
-      if (!row) continue;
-      if (!self && !closing && row.status === "current") return `${roomName} already has a running cycle (${c.name}). Close it first.`;
-      if (overlaps(mine, spanOf(row))) return `${roomName}: these dates overlap ${c.name}.`;
+      if (row && overlaps(mine, spanOf(row))) return `${roomName}: these dates overlap ${c.name}.`;
     }
   }
   return "";
@@ -109,7 +110,8 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
     setNeedName(false);
   }, [cycles, needName]);
   const yearFull = usedNames(cycles, form.year).length >= CYCLE_NAMES.length;
-  const [picked, setPicked] = useState(() => Object.fromEntries(rooms.map((r) => [r.id, { on: true, strain: r.cultivar || "" }])));
+  // Cycles usually cover one room, so none is ticked to start with.
+  const [picked, setPicked] = useState(() => Object.fromEntries(rooms.map((r) => [r.id, { on: false, strain: r.cultivar || "" }])));
   // Inline edit / close on one cycle: { key, mode: "edit" | "close", name, startDate, endDate }
   const [edit, setEdit] = useState(null);
 
@@ -174,7 +176,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
         <div className={cx.sub}>
           {tab === "targets"
             ? "Target ranges for each room's readings. They decide the in range, drifting and out of range colours on Live Rooms and the room pages."
-            : "Each cycle has a start date and an estimated end date. Readings, leachate captures and daily records dated inside that range count toward the cycle. Update the estimate any time, and close the cycle with the actual end date when the rooms are harvested."}
+            : "Each cycle has a start date and an estimated end date. Readings, leachate captures and daily records dated inside that range count toward the cycle. Several cycles can run at once in different rooms; one with a future start date shows as Scheduled until it starts. Update the estimate any time, and close the cycle with the actual end date when the room is harvested."}
         </div>
         <div className="mt-6 inline-flex gap-1 rounded-full border border-vbd bg-vcard p-1">
           {[
@@ -230,6 +232,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
             const isEdit = edit?.key === c.key;
             const roomNames = c.rows.map((r) => (rooms.find((x) => x.id === r.roomId) || {}).name || "?").join(", ");
             const strains = [...new Set(c.rows.map((r) => r.strain).filter(Boolean))].join(", ");
+            const [stLabel, stTone] = cycleState(c, T);
             return (
               <div key={c.key} className="border-b border-vbd px-6 py-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -239,17 +242,20 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
                       <span
                         className="whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold"
                         style={{
-                          color: c.current ? T.green[0] : "var(--vt3)",
-                          borderColor: c.current ? T.green[1] : "var(--vbd2)",
-                          background: c.current ? T.green[2] : "transparent",
+                          color: stTone ? stTone[0] : "var(--vt3)",
+                          borderColor: stTone ? stTone[1] : "var(--vbd2)",
+                          background: stTone ? stTone[2] : "transparent",
                         }}
                       >
-                        {c.current ? "Running" : "Closed"}
+                        {c.current ? "Running" : stLabel}
                       </span>
                     </div>
                     <div className="tnum mt-1.5 text-sm text-vt2">
-                      {fmt(c.startDate)} → {c.current ? "est. " + fmt(c.endDate) : fmt(c.endDate)}
-                      <span className="text-vt4"> · {c.current ? `day ${c.days}${c.estDays ? " of ~" + c.estDays : ""}` : c.days + " days"}</span>
+                      {fmt(c.startDate)} → {c.open ? "est. " + fmt(c.endDate) : fmt(c.endDate)}
+                      <span className="text-vt4">
+                        {" · "}
+                        {c.current ? `day ${c.days}${c.estDays ? " of ~" + c.estDays : ""}` : c.scheduled ? `~${c.days} days planned` : c.days + " days"}
+                      </span>
                     </div>
                     <div className="mt-1 text-[13px] text-vt3">
                       {roomNames}
@@ -292,7 +298,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
                         <DateInput light={light} value={edit.startDate} onChange={(v) => setEdit({ ...edit, startDate: v })} />
                       </Field>
                     )}
-                    <Field label={edit.mode === "close" ? "Actual end date" : c.current ? "Estimated end" : "End date"}>
+                    <Field label={edit.mode === "close" ? "Actual end date" : c.open ? "Estimated end" : "End date"}>
                       <DateInput light={light} value={edit.endDate} onChange={(v) => setEdit({ ...edit, endDate: v })} />
                     </Field>
                     <div className="flex gap-2">
@@ -319,7 +325,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
               <Field label="Name">
                 <Select light={light} value={form.name} onChange={(v) => setForm({ ...form, name: v })}>
                   <option value="" disabled>
-                    {yearFull ? "All 5 used" : "Pick a cycle"}
+                    {yearFull ? `All ${CYCLE_NAMES.length} used` : "Pick a cycle"}
                   </option>
                   {nameOptions(cycles, form.year)}
                 </Select>

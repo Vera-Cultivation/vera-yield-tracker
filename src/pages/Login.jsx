@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { cx, Logo } from "../components/ui";
-import { ThemeToggle } from "../components/Header";
 
-export default function Login({ theme, onToggleTheme, onSignIn, authError }) {
+export default function Login({ onSignIn, authError }) {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
@@ -20,7 +19,8 @@ export default function Login({ theme, onToggleTheme, onSignIn, authError }) {
   };
 
   return (
-    <div className="relative grid min-h-screen grid-cols-[repeat(auto-fit,minmax(min(100%,520px),1fr))]">
+    // Centred and capped at 1280px so the brand panel and the form stay together on large screens.
+    <div className="relative mx-auto grid min-h-screen max-w-[1280px] grid-cols-[repeat(auto-fit,minmax(min(100%,520px),1fr))]">
       {/* Brand panel */}
       <div className="relative flex min-h-[640px] flex-col justify-between gap-14 overflow-hidden border-r border-vbd bg-[linear-gradient(160deg,rgba(16,185,129,0.10)_0%,transparent_60%)] px-14 py-12">
         <div className="absolute left-1/2 top-[-10%] h-[120%] w-1 -translate-x-1/2 bg-[linear-gradient(180deg,transparent,#10b981_25%,#22d3ee_70%,transparent)] opacity-55 blur-[8px] shadow-[0_0_60px_#10b981,0_0_120px_rgba(34,211,238,0.5)]" />
@@ -62,10 +62,7 @@ export default function Login({ theme, onToggleTheme, onSignIn, authError }) {
       </div>
 
       {/* Sign-in form */}
-      <div className="relative flex flex-col justify-center gap-5 px-10 pb-12 pt-7">
-        <div className="self-end">
-          <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
-        </div>
+      <div className="relative flex flex-col justify-center gap-5 px-10 py-12">
         <div className="w-full max-w-[440px] self-center rounded-[28px] border border-vbd bg-vcard p-9 shadow-v backdrop-blur-xl">
           <div className="text-[30px] font-bold tracking-[-0.02em]">Sign in</div>
           <div className="mt-2 text-[15px] text-vt3">Enter your email and password to continue.</div>

@@ -68,7 +68,7 @@ export const cx = {
   eyebrow: "text-[11px] font-bold uppercase tracking-[0.18em] text-vaccent",
   h1: "mt-2.5 text-[44px] font-bold leading-[1.05] tracking-[-0.03em]",
   sub: "mt-3 max-w-[700px] text-[17px] leading-[1.55] text-vt3",
-  main: "relative mx-auto max-w-[1720px] px-10 pb-[90px] pt-11",
+  main: "relative mx-auto max-w-[1600px] px-10 pb-[90px] pt-11",
   btnPrimary:
     "whitespace-nowrap rounded-full border-0 bg-gradient-to-br from-[#10b981] to-[#22d3ee] px-[22px] py-3 text-sm font-bold text-[#04140f] shadow-[0_0_20px_-5px_rgba(16,185,129,0.6)] transition-all duration-[250ms] hover:scale-[1.03] hover:shadow-[0_0_32px_-5px_rgba(16,185,129,0.7)] active:scale-[0.97]",
   btnGhost:

@@ -173,10 +173,12 @@ export function buildCycles(rows) {
   const span = (a, b) => Math.max(1, Math.round((b - a) / 86400000) + 1);
   return rows.map((c) => {
     const start = parseIsoDay(c.startDate);
-    // A running cycle counts data up to today; its end_date is only the estimated end.
-    const current = c.open;
-    const estEnd = current && c.endDate ? parseIsoDay(c.endDate) : null;
-    const end = current ? today : parseIsoDay(c.endDate || c.startDate);
+    // An open cycle is scheduled until its start date, then running. A running cycle counts data
+    // up to today; its end_date is only the estimated end.
+    const scheduled = c.open && start > today;
+    const current = c.open && !scheduled;
+    const estEnd = c.open && c.endDate ? parseIsoDay(c.endDate) : null;
+    const end = current ? today : scheduled ? estEnd || start : parseIsoDay(c.endDate || c.startDate);
     const fd = (d) => fdate(d) + " " + d.getFullYear();
     return {
       ...c,
@@ -184,13 +186,33 @@ export function buildCycles(rows) {
       end,
       estEnd,
       current,
+      scheduled,
       days: span(start, end),
       estDays: estEnd ? span(start, estEnd) : null,
       name: `${c.year} · ${c.label}`,
-      range: fd(start) + " – " + (current ? "today" + (estEnd ? " · est. end " + fd(estEnd) : "") : fd(end)),
+      range: scheduled
+        ? "starts " + fd(start) + (estEnd ? " · est. end " + fd(estEnd) : "")
+        : fd(start) + " – " + (current ? "today" + (estEnd ? " · est. end " + fd(estEnd) : "") : fd(end)),
     };
   });
 }
+
+/** Index of the cycle to show first among `idx` (default: all): the latest running one, else the latest started, else the last. */
+export function pickCycle(cycles, idx = cycles.map((_, i) => i)) {
+  const last = (f) => idx.filter((i) => f(cycles[i])).at(-1);
+  return last((c) => c.current) ?? last((c) => !c.scheduled) ?? idx.at(-1) ?? -1;
+}
+
+/** "In progress" / "Scheduled" / "Closed" with its colour, for cycle badges. */
+export const cycleState = (c, T) =>
+  c.current ? ["In progress", T.green] : c.scheduled ? ["Scheduled", T.amber] : ["Closed", null];
+
+/** "Room 2, Room 3" for the rooms a cycle covers. */
+export const cycleRooms = (c, rooms) =>
+  rooms
+    .filter((r) => c.ids[r.id])
+    .map((r) => r.name)
+    .join(", ");
 
 export const cycleName = (cycles, key) => (cycles.find((c) => c.key === key) || {}).name || key;
 

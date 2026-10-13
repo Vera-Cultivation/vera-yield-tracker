@@ -1,38 +1,118 @@
 import { useMemo, useState } from "react";
 import { AdminBadge, cx, I, Icon, NoData, Pill, tabStyle } from "../components/ui";
 import * as api from "../lib/api";
-import { PRICE_PER_GRAM } from "../lib/config";
-import { avgOf, dailyRecord, fdate, fmt, gppOf, harvestOf, isoDay, kgOf, money, tones, useAsync } from "../lib/logic";
+import StatusFilter, { defaultStatus, matchStatus, statusLabel } from "../components/StatusFilter";
+import { avgOf, cycleRooms, cycleState, dailyRecord, fdate, fmt, isoDay, pickCycle, tones, useAsync } from "../lib/logic";
 
 const PER_PAGE = 14;
 const fmtP1 = (p) => (p ? (String(p).includes("%") ? p : p + "%") : "—");
 
-export default function Harvests({ rooms, theme, cycles, defaultCycle, harvests, saved }) {
+const fday = (d) => fdate(d) + " " + d.getFullYear();
+const DAY = 86400000;
+
+/** One cycle: name, status, room, start → end, and progress (running), countdown (scheduled) or length (closed). */
+function CycleCard({ c, rooms, T, light, active, onClick }) {
+  const [stLabel, stTone] = cycleState(c, T);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endDate = c.open ? c.estEnd : c.end;
+  const pct = c.current && c.estDays ? Math.min(1, c.days / c.estDays) : c.scheduled ? 0 : 1;
+  const over = c.current && c.estDays ? c.days - c.estDays : 0; // days past the estimated end
+  const barColor = over > 0 ? T.amber[0] : c.current ? T.green[0] : c.scheduled ? "transparent" : "var(--vt4)";
+  const startsIn = c.scheduled ? Math.round((c.start - today) / DAY) : 0;
+  const foot = c.current
+    ? ["Day " + c.days + (c.estDays ? " of ~" + c.estDays : ""), over > 0 ? over + (over === 1 ? " day" : " days") + " past est. end" : c.estDays ? Math.round(pct * 100) + "%" : ""]
+    : c.scheduled
+    ? ["Starts in " + startsIn + (startsIn === 1 ? " day" : " days"), "~" + c.days + " days planned"]
+    : [c.days + " days", "Harvested"];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col rounded-3xl border p-5 text-left text-vt1 transition-all duration-[250ms] hover:-translate-y-0.5 hover:!border-[rgba(16,185,129,0.4)]"
+      style={{
+        background: active ? (light ? "rgba(4,120,87,0.07)" : "rgba(16,185,129,0.08)") : "var(--vcard)",
+        borderColor: active ? "rgba(16,185,129,0.5)" : "var(--vbd)",
+        boxShadow: active ? "0 0 0 1px rgba(16,185,129,0.25)" : undefined,
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[19px] font-bold leading-tight tracking-[-0.015em]">{c.label}</div>
+          <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-vbd bg-vtile px-2.5 py-[3px] text-xs font-semibold text-vt2">
+            <span className="h-1.5 w-1.5 rounded-full bg-vcyan" />
+            {cycleRooms(c, rooms) || "No rooms"}
+          </div>
+        </div>
+        <span
+          className="whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold"
+          style={{ color: stTone ? stTone[0] : "var(--vt3)", borderColor: stTone ? stTone[1] : "var(--vbd2)", background: stTone ? stTone[2] : "transparent" }}
+        >
+          {stLabel}
+        </span>
+      </div>
+
+      <div className="tnum mt-4 grid grid-cols-2 gap-3 rounded-2xl border border-vbd bg-vtile px-3.5 py-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-vt4">Flower start</div>
+          <div className="mt-1 text-sm font-semibold">{fday(c.start)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-vt4">{c.open ? "Est. harvest" : "Harvest"}</div>
+          <div className="mt-1 text-sm font-semibold">{endDate ? fday(endDate) : "—"}</div>
+        </div>
+      </div>
+
+      <div className="mt-auto pt-4">
+        <div className="h-1.5 overflow-hidden rounded-full bg-vsoft2">
+          <div className="h-full rounded-full" style={{ width: pct * 100 + "%", background: barColor }} />
+        </div>
+        <div className="tnum mt-2 flex items-center justify-between gap-2 text-xs">
+          <span className="font-semibold text-vt2">{foot[0]}</span>
+          <span style={{ color: over > 0 ? T.amber[0] : "var(--vt4)" }}>{foot[1]}</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export default function Harvests({ rooms, theme, cycles, defaultCycle, saved }) {
   const light = theme === "light";
   const T = tones(theme);
   const [hCycle, setHCycle] = useState(defaultCycle);
   const [hYear, setHYear] = useState(cycles[defaultCycle].year);
-  const [hRoom, setHRoom] = useState(0);
+  const [hRoom, setHRoom] = useState(null); // room id; null = first room in the cycle
   const [hMetric, setHMetric] = useState("temp");
   const [hPage, setHPage] = useState(0);
+  const [hStatus, setHStatus] = useState(() => defaultStatus(cycles));
   const YEARS = [...new Set(cycles.map((c) => c.year))];
+  const yearIdx = cycles.map((c, i) => i).filter((i) => cycles[i].year === hYear);
+  const shownIdx = yearIdx.filter((i) => matchStatus(cycles[i], hStatus));
+  // Changing year or status keeps the picked cycle if it's still on screen, else picks one that is.
+  const pickYearStatus = (y, st) => {
+    const idx = cycles.map((c, i) => i).filter((i) => cycles[i].year === y && matchStatus(cycles[i], st));
+    setHYear(y);
+    setHStatus(st);
+    if (!idx.includes(hCycle) && idx.length) {
+      setHCycle(pickCycle(cycles, idx));
+      setHPage(0);
+    }
+  };
 
   const hc = cycles[hCycle];
-  const hr = rooms[Math.min(hRoom, rooms.length - 1)];
+  // Only rooms that are part of the picked cycle.
+  const hRooms = rooms.filter((r) => hc.ids[r.id]);
+  const hr = hRooms.find((r) => r.id === hRoom) || hRooms[0] || rooms[0];
   const statsQ = useAsync(() => api.loadDailyStats(isoDay(hc.start), isoDay(hc.end), hr.id), [hc.key, hc.days, hr.id]);
   const days = useMemo(() => dailyRecord(hc, hr, statsQ.data || [], saved), [hc, hr, statsQ.data, saved]);
   const withData = days.filter((x) => x.temp != null || x.vwc != null || x.caps).length;
 
-  const h = harvestOf(harvests, hr.id, hc.key);
-  const kg = kgOf(h);
-  const noH = hc.current ? "not harvested yet" : "no harvest recorded";
   const summary = [
     ["Days with data", String(withData), "of " + hc.days + (hc.current ? " so far" : " in cycle")],
     ["Avg temp", fmt(avgOf(days, "temp"), 1, " °F"), "setpoint " + hr.env.temp[1]],
     ["Avg humidity", fmt(avgOf(days, "rh"), 0, "%"), "setpoint " + hr.env.rh[1] + "%"],
     ["Avg VWC", fmt(avgOf(days, "vwc"), 1, "%"), "Aroya"],
-    ["Dry yield", fmt(kg, 1, " kg"), hr.veg ? "veg room" : h ? h.plants + " plants · " + fmt(gppOf(h), 0, " g") + "/plant" : noH],
-    ["Revenue", hr.veg || kg == null ? "—" : money(kg * 1000 * PRICE_PER_GRAM), hr.veg ? "veg room" : kg == null ? noH : "at $" + PRICE_PER_GRAM.toFixed(2) + "/g"],
   ];
 
   const mDefs = {
@@ -87,78 +167,51 @@ export default function Harvests({ rooms, theme, cycles, defaultCycle, harvests,
         <div className={cx.sub}>Pick a cycle, then a room, to see every day of its record — climate, root zone and leachate — from first day to harvest.</div>
       </div>
 
-      <div className="mt-8 flex flex-wrap items-center gap-3.5">
-        <span className={cx.label}>Harvest year</span>
-        <div className="flex flex-wrap gap-1.5">
-          {YEARS.map((y) => (
-            <Pill
-              key={y}
-              active={y === hYear}
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
+        <div className="flex flex-wrap items-center gap-3.5">
+          <span className={cx.label}>Harvest year</span>
+          <div className="flex flex-wrap gap-1.5">
+            {YEARS.map((y) => (
+              <Pill key={y} active={y === hYear} light={light} className="tnum !px-4 !py-2 !font-bold" onClick={() => pickYearStatus(y, hStatus)}>
+                {y}
+              </Pill>
+            ))}
+          </div>
+        </div>
+        <StatusFilter cycles={yearIdx.map((i) => cycles[i])} value={hStatus} onChange={(st) => pickYearStatus(hYear, st)} light={light} />
+      </div>
+
+      {!shownIdx.length ? (
+        <div className={cx.card + " mt-4 px-8 py-10 text-center text-[15px] text-vt3"}>
+          No {statusLabel(hStatus).toLowerCase()} cycles in {hYear}.
+        </div>
+      ) : (
+        <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(min(100%,270px),1fr))] gap-4">
+          {shownIdx.map((i) => (
+            <CycleCard
+              key={cycles[i].key}
+              c={cycles[i]}
+              rooms={rooms}
+              T={T}
               light={light}
-              className="tnum !px-4 !py-2 !font-bold"
+              active={i === hCycle}
               onClick={() => {
-                const ix = cycles.map((c, i) => i).filter((i) => cycles[i].year === y);
-                setHYear(y);
-                setHCycle(ix[ix.length - 1]);
+                setHCycle(i);
                 setHPage(0);
               }}
-            >
-              {y}
-            </Pill>
+            />
           ))}
         </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-4">
-        {cycles
-          .map((c, i) => ({ c, i }))
-          .filter(({ c }) => c.year === hYear)
-          .map(({ c, i }) => {
-            const a = i === hCycle;
-            return (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => {
-                  setHCycle(i);
-                  setHPage(0);
-                }}
-                className="rounded-3xl border px-6 py-[22px] text-left text-vt1 transition-all duration-[250ms] hover:!border-[rgba(16,185,129,0.4)]"
-                style={{
-                  background: a ? (light ? "rgba(4,120,87,0.07)" : "rgba(16,185,129,0.08)") : "var(--vcard)",
-                  borderColor: a ? "rgba(16,185,129,0.45)" : "var(--vbd)",
-                }}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[19px] font-bold tracking-[-0.015em]">{c.label}</span>
-                  <span
-                    className="whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-bold"
-                    style={{
-                      color: c.current ? T.green[0] : "var(--vt3)",
-                      borderColor: c.current ? T.green[1] : "var(--vbd2)",
-                      background: c.current ? T.green[2] : "transparent",
-                    }}
-                  >
-                    {c.current ? "In progress" : "Closed"}
-                  </span>
-                </div>
-                <div className="tnum mt-2 text-sm text-vt3">{c.range}</div>
-                <div className="tnum mt-3.5 text-[13px] text-vt2">
-                  {c.days} days{c.current ? " so far" + (c.estDays ? " · ~" + c.estDays + " planned" : "") : ""}
-                </div>
-              </button>
-            );
-          })}
-      </div>
+      )}
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {rooms.map((r, i) => (
+        {hRooms.map((r) => (
           <Pill
             key={r.id}
             active={r.id === hr.id}
             light={light}
             onClick={() => {
-              setHRoom(i);
+              setHRoom(r.id);
               setHPage(0);
             }}
           >

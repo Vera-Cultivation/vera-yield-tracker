@@ -1,6 +1,6 @@
 {
   "project": "https://utmrudryffiokvkgudlf.supabase.co",
-  "fetchedAt": "2026-10-01T19:57:42.558Z",
+  "fetchedAt": "2026-10-13T10:53:44.160Z",
   "tables": [
     {
       "name": "app_users",
@@ -625,6 +625,11 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "permissions",
+          "type": "text[]",
+          "nullable": false
         }
       ]
     },
@@ -688,6 +693,70 @@
         },
         {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ]
+    },
+    {
+      "name": "room_targets",
+      "operations": [
+        "get",
+        "post",
+        "patch",
+        "delete"
+      ],
+      "columns": [
+        {
+          "name": "cycle_id",
+          "type": "uuid",
+          "nullable": false,
+          "primaryKey": true,
+          "references": "harvest_cycles.id"
+        },
+        {
+          "name": "metric",
+          "type": "public.metric_kind",
+          "nullable": false,
+          "primaryKey": true,
+          "enum": [
+            "temp",
+            "rh",
+            "co2",
+            "vwc",
+            "ec",
+            "rzt"
+          ]
+        },
+        {
+          "name": "setpoint",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "target_low",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "target_high",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "drift_margin",
+          "type": "numeric",
+          "nullable": true
+        },
+        {
+          "name": "updated_by",
+          "type": "uuid",
+          "nullable": true,
+          "references": "profiles.id"
+        },
+        {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
@@ -943,6 +1012,15 @@
     }
   ],
   "functions": [
+    {
+      "name": "has_perm",
+      "args": [
+        {
+          "name": "p",
+          "type": "text"
+        }
+      ]
+    },
     {
       "name": "is_admin",
       "args": []

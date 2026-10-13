@@ -12,7 +12,7 @@ export default function Home({ rooms, theme, onOpenRoom }) {
   ].map(([k, label]) => ({ label, color: T[k][0], count: statuses.filter((s) => s === k).length }));
 
   return (
-    <main className="relative mx-auto max-w-[1720px] px-10 pb-20 pt-11">
+    <main className="relative mx-auto max-w-[1600px] px-10 pb-20 pt-11">
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-vaccent">Facility</div>
@@ -20,7 +20,7 @@ export default function Home({ rooms, theme, onOpenRoom }) {
             {rooms.length === 1 ? "One Room" : "Every Room"}, <span className="grad-text">One View.</span>
           </div>
           <div className="mt-3 max-w-[640px] text-[17px] leading-normal text-vt3">
-            Climate from SkySpark and root zone from Aroya, side by side for every room. Tap a room to open it.
+            Climate from SkySpark and root zone from Aroya, side by side for every room.{onOpenRoom ? " Tap a room to open it." : ""}
           </div>
         </div>
         <div className="flex flex-wrap gap-[18px]">
@@ -57,8 +57,12 @@ export default function Home({ rooms, theme, onOpenRoom }) {
             <button
               key={x.id}
               type="button"
+              disabled={!onOpenRoom}
               onClick={() => onOpenRoom(i)}
-              className="flex flex-col gap-[22px] rounded-[28px] border bg-vcard px-[30px] py-7 text-left text-inherit backdrop-blur-xl transition-all duration-300 hover:-translate-y-[3px] hover:!border-[rgba(16,185,129,0.35)] active:scale-[0.99]"
+              className={
+                "flex flex-col gap-[22px] rounded-[28px] border bg-vcard px-[30px] py-7 text-left text-inherit backdrop-blur-xl transition-all duration-300 " +
+                (onOpenRoom ? "hover:-translate-y-[3px] hover:!border-[rgba(16,185,129,0.35)] active:scale-[0.99]" : "cursor-default")
+              }
               style={{ borderColor: t.border, boxShadow: `0 0 0 1px rgba(16,185,129,0.06),0 25px 50px -12px ${glow}` }}
             >
               <div className="flex items-start justify-between gap-4">
@@ -88,10 +92,12 @@ export default function Home({ rooms, theme, onOpenRoom }) {
                     <span className="font-semibold text-vcyan">Aroya</span> VWC · EC
                   </span>
                 </span>
-                <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-vaccent">
-                  Open room
-                  <Icon d={I.arrowRight} size={15} stroke={2} />
-                </span>
+                {onOpenRoom && (
+                  <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-vaccent">
+                    Open room
+                    <Icon d={I.arrowRight} size={15} stroke={2} />
+                  </span>
+                )}
               </div>
             </button>
           );

@@ -21,15 +21,18 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
 
-  // Only signed-in team members may use the model.
+  // Only signed-in team members with AI crop reports access (admins always have it) may use the model.
   const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
   });
   const { data: auth } = await sb.auth.getUser();
   const { data: profile } = auth.user
-    ? await sb.from("profiles").select("is_active").eq("id", auth.user.id).maybeSingle()
+    ? await sb.from("profiles").select("*").eq("id", auth.user.id).maybeSingle()
     : { data: null };
   if (!profile?.is_active) return json({ error: "Not on the Vera Yield Tracker team." }, 403);
+  if (profile.role !== "admin" && !(profile.permissions ?? []).includes("ai_reports")) {
+    return json({ error: "You don't have access to AI crop reports. Ask an admin." }, 403);
+  }
 
   let prompt: unknown;
   try {

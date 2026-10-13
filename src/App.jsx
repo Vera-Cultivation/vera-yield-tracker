@@ -11,7 +11,7 @@ import DataEntry from "./pages/DataEntry";
 import Team from "./pages/Team";
 import Settings from "./pages/Settings";
 import * as api from "./lib/api";
-import { buildCycles } from "./lib/logic";
+import { buildCycles, pickCycle } from "./lib/logic";
 
 // Each page has its own URL, so refresh, back/forward and bookmarks keep you where you were.
 const PATHS = { home: "/", reports: "/reports", harvests: "/harvests", entry: "/data-entry", team: "/team", settings: "/settings", targets: "/settings/targets" };
@@ -31,7 +31,20 @@ function pathOf({ screen, room }) {
   return PATHS[screen] || "/";
 }
 
-const ADMIN_SCREENS = ["reports", "harvests", "team", "roomReport", "settings", "targets"];
+// The permission each screen needs (see PERMISSIONS in lib/config.js). "admin" = admins only.
+const SCREEN_PERM = {
+  home: "live_rooms",
+  room: "room_detail",
+  reports: "ai_reports",
+  roomReport: "ai_reports",
+  harvests: "harvests",
+  entry: "data_entry",
+  team: "admin",
+  settings: "admin",
+  targets: "admin",
+};
+// Where someone lands when the page they asked for isn't theirs.
+const FALLBACK = ["home", "entry", "reports", "harvests"];
 const CYCLE_SCREENS = ["reports", "roomReport", "harvests", "entry"];
 
 /** Claude is asked for JSON; fall back to treating the reply as the summary. */
@@ -83,8 +96,8 @@ export default function App() {
     () => saved.map((x) => ({ ...x, by: (team.find((m) => m.id === x.savedBy) || {}).name || "" })),
     [saved, team]
   );
-  const openCycle = cycles.findIndex((c) => c.current);
-  const defaultCycle = openCycle >= 0 ? openCycle : cycles.length - 1;
+  // Several cycles can run at once (one per room); start on the latest running one.
+  const defaultCycle = pickCycle(cycles);
 
   /* theme */
   useEffect(() => {
@@ -202,7 +215,7 @@ export default function App() {
         stage: room.stage,
         cultivar: room.cultivar,
         cycle: cy.name,
-        cycleStatus: cy.current ? "in progress" : "closed",
+        cycleStatus: cy.current ? "in progress" : cy.scheduled ? "scheduled, not started" : "closed",
         days: cy.days,
         kpis: R.kpis,
         current: cy.current ? { environment: room.env, rootZone: room.rz } : undefined,
@@ -255,6 +268,10 @@ export default function App() {
     await api.setMemberRole(m.id, role);
     setTeam((t) => t.map((x) => (x.id === m.id ? { ...x, role } : x)));
   };
+  const setPermissions = async (m, perms) => {
+    await api.setMemberPermissions(m.id, perms);
+    setTeam((t) => t.map((x) => (x.id === m.id ? { ...x, perms } : x)));
+  };
   const toggleActive = async (m) => {
     await api.setMemberActive(m.id, !m.active);
     setTeam((t) => t.map((x) => (x.id === m.id ? { ...x, active: !m.active } : x)));
@@ -288,21 +305,40 @@ export default function App() {
       </EmptyState>
     );
   if (conn === "checking" || booting) return shell(<div className="relative flex min-h-screen items-center justify-center text-sm text-vt3">Connecting to Supabase…</div>);
-  if (!user) return shell(<Login theme={theme} onToggleTheme={toggleTheme} onSignIn={signIn} authError={authError} />);
+  if (!user) return shell(<Login onSignIn={signIn} authError={authError} />);
 
   const isAdmin = user.role === "admin";
-  const scr = !isAdmin && ADMIN_SCREENS.includes(route.screen) ? "home" : route.screen;
+  const can = (p) => isAdmin || (p !== "admin" && user.perms.includes(p));
+  const allowed = (s) => can(SCREEN_PERM[s]);
+  const scr = allowed(route.screen) ? route.screen : FALLBACK.find(allowed) || "none";
   const navCurrent = { room: "home", roomReport: "reports", targets: "settings" }[scr] || scr;
   // Room from the URL key; an unknown key falls back to the first room.
   const ri = Math.max(0, rooms.findIndex((r) => r.key === route.room));
   const pickerProps = { cycles, year: rYear, cycle: rCycle, onYear: setRYear, onCycle: setRCycle };
+  // Point the report picker at a room's own cycle: its running one, else its latest started one.
+  const showRoomCycle = (room) => {
+    const i = pickCycle(cycles, cycles.map((c, j) => j).filter((j) => cycles[j].ids[room.id]));
+    if (i >= 0) {
+      setRCycle(i);
+      setRYear(cycles[i].year);
+    }
+  };
 
   let body;
   if (!loaded) body = <div className="relative flex min-h-[50vh] items-center justify-center text-sm text-vt3">Loading data…</div>;
-  else if (scr === "team") body = <Team theme={theme} user={user} team={team} onAdd={addMember} onToggleRole={toggleRole} onToggleActive={toggleActive} />;
+  else if (scr === "none")
+    body = (
+      <main className="relative mx-auto max-w-[1600px] px-10 pt-11">
+        <EmptyState title="No access yet">Your account doesn't have any features turned on. Ask an admin to give you access on the Team page.</EmptyState>
+      </main>
+    );
+  else if (scr === "team")
+    body = (
+      <Team theme={theme} user={user} team={team} onAdd={addMember} onToggleRole={toggleRole} onToggleActive={toggleActive} onSetPermissions={setPermissions} />
+    );
   else if (!rooms.length)
     body = (
-      <main className="relative mx-auto max-w-[1720px] px-10 pt-11">
+      <main className="relative mx-auto max-w-[1600px] px-10 pt-11">
         <EmptyState title="No rooms in Supabase yet">
           Rooms come from the <span className="font-mono text-vt1">rooms</span> table, with current readings from the SkySpark and Aroya sync. If rooms exist but don't show, check that signed-in users can read them (see <span className="font-mono text-vt1">supabase/policies.sql</span>).
         </EmptyState>
@@ -324,7 +360,7 @@ export default function App() {
     );
   else if (CYCLE_SCREENS.includes(scr) && (!cycles.length || rCycle < 0))
     body = (
-      <main className="relative mx-auto max-w-[1720px] px-10 pt-11">
+      <main className="relative mx-auto max-w-[1600px] px-10 pt-11">
         <EmptyState title="No harvest cycles yet">
           {isAdmin ? "Create the cycle that's running now, with its start date and estimated end. Data dated inside it shows up here." : "An admin needs to create the harvest cycle that's running now before data can be added."}
           {isAdmin && (
@@ -342,7 +378,7 @@ export default function App() {
       <Home
         rooms={rooms}
         theme={theme}
-        onOpenRoom={(i) => go("room", rooms[i].key)}
+        onOpenRoom={can("room_detail") ? (i) => go("room", rooms[i].key) : null}
       />
     );
   else if (scr === "room")
@@ -350,16 +386,13 @@ export default function App() {
       <Room
         room={rooms[ri]}
         theme={theme}
-        isAdmin={isAdmin}
+        canReport={can("ai_reports")}
         saved={savedRows}
         harvests={harvests}
         cycles={cycles}
         onBack={() => go("home")}
         onOpenReport={() => {
-          if (defaultCycle >= 0) {
-            setRCycle(defaultCycle);
-            setRYear(cycles[defaultCycle].year);
-          }
+          showRoomCycle(rooms[ri]);
           go("roomReport", rooms[ri].key);
         }}
       />
@@ -374,7 +407,7 @@ export default function App() {
         saved={savedRows}
         regen={regen}
         onRegenerate={regenerate}
-        onOpen={(i) => go("roomReport", rooms[i].key)}
+        onOpen={(room) => go("roomReport", room.key)}
       />
     );
   else if (scr === "roomReport")
@@ -388,17 +421,18 @@ export default function App() {
         saved={savedRows}
         regen={regen}
         onRegenerate={regenerate}
-        onBack={() => go("room", rooms[ri].key)}
+        canBackToRoom={can("room_detail")}
+        onBack={() => (can("room_detail") ? go("room", rooms[ri].key) : go("reports"))}
       />
     );
-  else if (scr === "harvests") body = <Harvests rooms={rooms} theme={theme} cycles={cycles} defaultCycle={defaultCycle} harvests={harvests} saved={savedRows} />;
-  else if (scr === "entry") body = <DataEntry rooms={rooms} theme={theme} cycles={cycles} openCycle={openCycle} saved={savedRows} onSave={saveLeachate} onUpdate={updateLeachate} />;
+  else if (scr === "harvests") body = <Harvests rooms={rooms} theme={theme} cycles={cycles} defaultCycle={defaultCycle} saved={savedRows} />;
+  else if (scr === "entry") body = <DataEntry rooms={rooms} theme={theme} cycles={cycles} defaultCycle={defaultCycle} saved={savedRows} onSave={saveLeachate} onUpdate={updateLeachate} />;
 
   return shell(
     <>
-      <Header theme={theme} onToggleTheme={toggleTheme} user={user} isAdmin={isAdmin} current={navCurrent} onNavigate={go} onSignOut={signOut} />
+      <Header theme={theme} onToggleTheme={toggleTheme} user={user} isAdmin={isAdmin} can={can} current={navCurrent} onNavigate={go} onSignOut={signOut} />
       {loadError && (
-        <div className="relative mx-auto mt-6 max-w-[1720px] px-10">
+        <div className="relative mx-auto mt-6 max-w-[1600px] px-10">
           <div className="rounded-[14px] border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.10)] px-4 py-3 text-sm">{loadError}</div>
         </div>
       )}

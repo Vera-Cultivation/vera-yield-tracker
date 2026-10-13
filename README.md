@@ -14,12 +14,12 @@ All data comes from the existing Supabase project. There is no seed or dummy dat
 | Current readings | `environment_current` (temp, rh, co2), `rootzone_current` (vwc, ec, rzt) | One row per room per metric, written by the SkySpark/Aroya sync. Targets come from `room_targets` for the room's running cycle (admins set them per room per cycle in **Settings → Targets**; a new cycle copies the previous one), then the sync's own target columns, then `DEFAULT_TARGETS` in `src/lib/config.js` |
 | Chart history | `environment_readings`, `rootzone_readings` | Last 72h, averaged into 15-minute points in the browser |
 | Daily history | `daily_records` | |
-| Harvest cycles | `harvest_cycles` | Managed by admins on the **Settings** page. One row per room; rows with the same `harvest_year` + `name` show as one cycle. While running (`status = current`), `end_date` is the estimated end and data counts up to today; closing sets the actual end. Saving also stamps `daily_records.cycle_id` / `day_number` |
+| Harvest cycles | `harvest_cycles` | Managed by admins on the **Settings** page. One row per room; rows with the same `harvest_year` + `name` (Cycle 1 … Cycle 30) show as one cycle, so the grow team's 26.08 is 2026 · Cycle 8. Any number can be open at once in different rooms, as long as a room's cycles don't overlap. An open cycle (`status = current`) is Scheduled until its `start_date`, then In progress; `end_date` is the estimated end and data counts up to today; closing (`status = complete`) sets the actual end. Saving also stamps `daily_records.cycle_id` / `day_number` |
 | Harvest records | `harvest_reports` | Weights as text: `12.4 kg`, `850 g` or `3 lb` (plain numbers are grams) |
-| Leachate captures | `leachate_log` | Added on Data Entry |
+| Leachate captures | `leachate_log` | Added on Data Entry to a cycle in progress: typed in, pasted from the Google Sheet, or imported from a CSV (Download Sample gives the layout). Export CSV downloads a room's rows for a cycle |
 | AI reports | `crop_reports` | Written by Claude through the `ai` Edge Function; the newest per room + cycle is shown |
 | Logins | Supabase Auth | Email + password |
-| Team, roles, active/disabled | `profiles` | Admins add people, change roles and disable them on the Team page |
+| Team, roles, active/disabled, feature access | `profiles` | Admins add people, change roles, disable them and pick each staff member's features (`permissions`: live rooms, room detail, AI reports, harvest history, data entry) on the Team page |
 
 `supabase/schema.json` is the current schema of every table, pulled from the live project (see below).
 
@@ -28,7 +28,7 @@ All data comes from the existing Supabase project. There is no seed or dummy dat
 1. Install Node.js 18+.
 2. `npm install`
 3. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-4. First admin: create the user in **Authentication → Users → Add user** (tick *Auto Confirm User*), then run `supabase/profiles.sql` in the SQL Editor with that user's id and email, then `supabase/policies.sql`, `supabase/policies-cycles.sql` and `supabase/room-targets.sql`.
+4. First admin: create the user in **Authentication → Users → Add user** (tick *Auto Confirm User*), then run `supabase/profiles.sql` in the SQL Editor with that user's id and email, then `supabase/policies.sql`, `supabase/policies-cycles.sql`, `supabase/room-targets.sql` and `supabase/permissions.sql`.
 5. **Authentication → Sign In / Providers → Email:** turn off *Confirm email*, so people the admin adds can sign in straight away.
 6. `npm run dev` and open http://localhost:5173.
 
@@ -57,7 +57,7 @@ npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 npx supabase functions deploy ai
 ```
 
-The function only answers signed-in users with an active row in `profiles`.
+The function only answers signed-in admins, and staff with AI crop reports access.
 
 ## Structure
 
@@ -75,6 +75,7 @@ supabase/
   policies.sql          read/write rules for the data tables
   policies-cycles.sql   lets admins manage harvest cycles from Settings
   room-targets.sql      target ranges per room per cycle, set in Settings -> Targets
+  permissions.sql       per-staff feature access (profiles.permissions) and the policies that enforce it
   fetch-schema.mjs      `npm run schema`: pulls the table schema from the API
   schema.json           output of the above
   functions/ai/index.ts Claude edge function

@@ -146,7 +146,7 @@ const lastTs = (series, k) => {
   return null;
 };
 
-export default function Room({ room, theme, isAdmin, saved, harvests, cycles, onBack, onOpenReport }) {
+export default function Room({ room, theme, canReport, saved, harvests, cycles, onBack, onOpenReport }) {
   const light = theme === "light";
   const T = tones(theme);
   // Time range for the page: last 24 hours, last 7 days, or a custom day range.
@@ -216,7 +216,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
     : [];
 
   return (
-    <main className="relative mx-auto max-w-[1720px] px-10 pb-[90px] pt-8">
+    <main className="relative mx-auto max-w-[1600px] px-10 pb-[90px] pt-8">
       <button
         type="button"
         onClick={onBack}
@@ -263,7 +263,7 @@ export default function Room({ room, theme, isAdmin, saved, harvests, cycles, on
               </>
             )}
           </div>
-          {isAdmin && (
+          {canReport && (
             <button type="button" onClick={onOpenReport} className={cx.btnPrimary + " flex items-center gap-2 py-[13px] text-[15px]"}>
               <Icon d={I.ai} />
               View AI Report

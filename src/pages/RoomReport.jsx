@@ -1,7 +1,7 @@
 import CyclePicker from "../components/CyclePicker";
 import { cx, I, Icon, StatusBadge } from "../components/ui";
 import { avgOf, dailyRecord, fmt, mean, num, reportFor, roomStatus, tone, tones } from "../lib/logic";
-import { aiStamp, closedTone, RecList, useCycleStats } from "./Reports";
+import { aiStamp, closedTone, RecList, scheduledTone, useCycleStats } from "./Reports";
 
 function SnapCard({ title, source, accent, rows }) {
   return (
@@ -26,7 +26,7 @@ function SnapCard({ title, source, accent, rows }) {
   );
 }
 
-export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYear, onCycle, harvests, saved, regen, onRegenerate, onBack }) {
+export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYear, onCycle, harvests, saved, regen, onRegenerate, canBackToRoom = true, onBack }) {
   const T = tones(theme);
   const r = rooms[ri];
   const cy = cycles[cycle];
@@ -35,7 +35,8 @@ export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYe
   const days = dailyRecord(cy, r, statsQ.data || [], saved);
   const rg = regen[r.id + "|" + cy.key] || {};
   const R = reportFor(r, cy, prevCy, harvests, days, rg);
-  const t = cy.current ? tone(T, roomStatus(r).s) : closedTone;
+  const t = cy.current ? tone(T, roomStatus(r).s) : cy.scheduled ? scheduledTone : closedTone;
+  const inCycle = Boolean(cy.ids[r.id]);
   const cA = (k) => avgOf(days, k);
 
   const env = cy.current
@@ -82,10 +83,10 @@ export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYe
       <div data-noprint className="flex flex-wrap items-center justify-between gap-3">
         <button type="button" onClick={onBack} className={cx.btnGhost}>
           <Icon d={I.arrowLeft} size={15} stroke={2} />
-          Back to {r.name}
+          {canBackToRoom ? "Back to " + r.name : "All reports"}
         </button>
         <div className="flex flex-wrap items-center gap-2.5">
-          <button type="button" disabled={statsQ.loading} onClick={() => onRegenerate(r, cy, R, days)} className={cx.btnGhost}>
+          <button type="button" disabled={statsQ.loading || !inCycle} onClick={() => onRegenerate(r, cy, R, days)} className={cx.btnGhost}>
             <Icon d={I.ai} />
             {rg.loading ? "Generating…" : R.summary ? "Regenerate" : "Generate"}
           </button>
@@ -97,8 +98,14 @@ export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYe
       </div>
 
       <div className="mt-5">
-        <CyclePicker theme={theme} cycles={cycles} year={year} cycle={cycle} onYear={onYear} onCycle={onCycle} />
+        <CyclePicker theme={theme} cycles={cycles} rooms={rooms} roomId={r.id} year={year} cycle={cycle} onYear={onYear} onCycle={onCycle} />
       </div>
+
+      {!inCycle && (
+        <div className={cx.card + " mt-5 px-8 py-12 text-center text-[15px] text-vt3"}>
+          {r.name} isn't part of {cy.name}. Pick one of {r.name}'s cycles above.
+        </div>
+      )}
 
       {(statsQ.error || rg.error) && (
         <div data-noprint className="mt-5 rounded-[14px] border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.10)] px-4 py-3 text-sm">
@@ -106,6 +113,7 @@ export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYe
         </div>
       )}
 
+      {inCycle && (
       <article className={cx.card + " mt-5 flex flex-col gap-7 p-10"}>
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
@@ -142,6 +150,7 @@ export default function RoomReport({ rooms, ri, theme, cycles, year, cycle, onYe
           <span>Built by Claude from SkySpark, Aroya and leachate data · EAH Enterprises, LLC</span>
         </div>
       </article>
+      )}
     </main>
   );
 }

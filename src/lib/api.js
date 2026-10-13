@@ -1,7 +1,7 @@
 // Data layer. Everything is read from and written to Supabase.
 import { createClient } from "@supabase/supabase-js";
-import { DEFAULT_TARGETS } from "./config";
-import { captureDay, mean, num } from "./logic";
+import { DEFAULT_TARGETS, STAFF_DEFAULT } from "./config";
+import { captureDay, isoDay, mean, num } from "./logic";
 import { supabase, isConfigured } from "./supabase";
 
 export { isConfigured };
@@ -35,6 +35,8 @@ const fromMember = (m) => ({
   email: m.email,
   role: m.role,
   active: m.is_active,
+  // Before supabase/permissions.sql is run the column is missing; staff keep their old access.
+  perms: m.permissions || STAFF_DEFAULT,
   createdAt: m.created_at,
 });
 const str = (v) => (v == null ? "" : String(v));
@@ -152,10 +154,11 @@ export async function loadRooms() {
     supabase.from("environment_current").select("*"),
     supabase.from("rootzone_current").select("*"),
     supabase.from("room_targets").select("*"),
-    supabase.from("harvest_cycles").select("id, room_id").eq("status", "current"),
+    supabase.from("harvest_cycles").select("id, room_id, start_date").eq("status", "current").lte("start_date", todayIso()).order("start_date"),
   ]);
   fail(rooms.error || env.error || rz.error);
   const targets = tg.error ? [] : tg.data; // before room-targets.sql is run, defaults apply
+  // A room's running cycle is its open one that has started (scheduled ones come later); the latest wins.
   const runningCycle = Object.fromEntries((running.data || []).map((c) => [c.room_id, c.id]));
   return rooms.data.map((r) => {
     const e = env.data.filter((x) => x.room_id === r.id);
@@ -244,7 +247,7 @@ export async function loadCycles() {
 }
 
 /* ------------------------------------------------- cycle settings (admin) */
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => isoDay(new Date()); // local date, like the rest of the app
 const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 
 // Stamp daily_records inside a room's cycle with cycle_id + day_number, and clear stamps
@@ -399,7 +402,7 @@ export async function loadTeam() {
 let signupClient;
 
 /** Admin adds a person: creates their login (email + password), then their profile row. */
-export async function addMember({ name, email, password, role }, me) {
+export async function addMember({ name, email, password, role, perms }, me) {
   signupClient ||= createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, storageKey: "vira-signup" },
   });
@@ -409,7 +412,7 @@ export async function addMember({ name, email, password, role }, me) {
   if (!signup.user || !signup.user.identities?.length) throw new Error(email + " already has a login.");
   const { data, error } = await supabase
     .from("profiles")
-    .insert({ id: signup.user.id, full_name: name, email, role, created_by: me.id })
+    .insert({ id: signup.user.id, full_name: name, email, role, permissions: perms, created_by: me.id })
     .select()
     .single();
   fail(error);
@@ -418,6 +421,11 @@ export async function addMember({ name, email, password, role }, me) {
 
 export async function setMemberRole(id, role) {
   const { error } = await supabase.from("profiles").update({ role }).eq("id", id);
+  fail(error);
+}
+
+export async function setMemberPermissions(id, perms) {
+  const { error } = await supabase.from("profiles").update({ permissions: perms }).eq("id", id);
   fail(error);
 }
 

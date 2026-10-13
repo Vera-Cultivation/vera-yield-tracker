@@ -1,14 +1,15 @@
 import { cx, Pill } from "./ui";
-import { tones } from "../lib/logic";
+import { cycleRooms, pickCycle, tones } from "../lib/logic";
 
-/** Harvest-year pills + cycle cards, shared by AI Reports and the per-room report. */
-export default function CyclePicker({ theme, cycles, year, cycle, onYear, onCycle }) {
+/** Harvest-year pills + cycle cards, shared by AI Reports, the per-room report and Targets.
+ *  `rooms` shows which rooms each cycle covers; `roomId` limits the cards to that room's cycles. */
+export default function CyclePicker({ theme, cycles, year, cycle, onYear, onCycle, rooms = [], roomId = null }) {
   const light = theme === "light";
   const T = tones(theme);
-  const CYCLES = cycles;
-  const YEARS = [...new Set(cycles.map((c) => c.year))];
-  const idx = CYCLES.map((c, i) => i).filter((i) => CYCLES[i].year === year);
-  const last = CYCLES[idx[idx.length - 1]];
+  const mine = cycles.map((c, i) => i).filter((i) => !roomId || cycles[i].ids[roomId]);
+  const YEARS = [...new Set(mine.map((i) => cycles[i].year))];
+  const idx = mine.filter((i) => cycles[i].year === year);
+  const live = idx.filter((i) => cycles[i].current).length;
 
   return (
     <div data-noprint className={cx.card + " flex flex-col gap-3.5 px-6 py-5"}>
@@ -22,9 +23,8 @@ export default function CyclePicker({ theme, cycles, year, cycle, onYear, onCycl
               light={light}
               className="tnum !px-4 !py-2 !font-bold"
               onClick={() => {
-                const ix = CYCLES.map((c, i) => i).filter((i) => CYCLES[i].year === y);
                 onYear(y);
-                onCycle(ix[ix.length - 1]);
+                onCycle(pickCycle(cycles, mine.filter((i) => cycles[i].year === y)));
               }}
             >
               {y}
@@ -33,13 +33,14 @@ export default function CyclePicker({ theme, cycles, year, cycle, onYear, onCycl
         </div>
         <span className="text-[13px] text-vt4">
           {idx.length} harvest {idx.length === 1 ? "cycle" : "cycles"}
-          {last && last.current ? " so far" : ""}
+          {live ? " · " + live + " running" : ""}
         </span>
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,200px),1fr))] gap-2.5">
         {idx.map((i) => {
-          const c = CYCLES[i];
+          const c = cycles[i];
           const a = i === cycle;
+          const where = cycleRooms(c, rooms);
           return (
             <button
               key={c.key}
@@ -55,10 +56,11 @@ export default function CyclePicker({ theme, cycles, year, cycle, onYear, onCycl
                 <span className="text-base font-bold" style={{ color: a ? "var(--vaccent)" : "var(--vt1)" }}>
                   {c.label}
                 </span>
-                <span className="text-[11px] font-bold" style={{ color: c.current ? T.green[0] : "var(--vt4)" }}>
-                  {c.current ? "LIVE" : "Closed"}
+                <span className="text-[11px] font-bold" style={{ color: c.current ? T.green[0] : c.scheduled ? T.amber[0] : "var(--vt4)" }}>
+                  {c.current ? "LIVE" : c.scheduled ? "Scheduled" : "Closed"}
                 </span>
               </div>
+              {where && <div className="mt-0.5 text-xs font-semibold text-vt2">{where}</div>}
               <div className="tnum mt-1 text-xs text-vt3">{c.range}</div>
             </button>
           );

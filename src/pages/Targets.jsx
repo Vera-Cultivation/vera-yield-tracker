@@ -2,7 +2,7 @@ import { useState } from "react";
 import CyclePicker from "../components/CyclePicker";
 import { cx } from "../components/ui";
 import { DEFAULT_TARGETS } from "../lib/config";
-import { ENV_DEFS, RZ_DEFS } from "../lib/logic";
+import { ENV_DEFS, pickCycle, RZ_DEFS } from "../lib/logic";
 
 // [key, label, unit] for the six readings. Setpoints only apply to the climate readings.
 const METRICS = [...ENV_DEFS, ...RZ_DEFS].map(([k, label, unit]) => [k, label, unit]);
@@ -185,9 +185,8 @@ function RoomTargets({ room, rooms, cy, targets, light, onSave }) {
 
 export default function Targets({ rooms, cycles, targets, theme, onSave }) {
   const light = theme === "light";
-  // Start on the running cycle (or the latest one).
-  const open = cycles.findIndex((c) => c.current);
-  const start = open >= 0 ? open : cycles.length - 1;
+  // Start on the latest running cycle (or the latest started one).
+  const start = pickCycle(cycles);
   const [cycle, setCycle] = useState(start);
   const [year, setYear] = useState(cycles[start]?.year);
   const cy = cycles[Math.min(cycle, cycles.length - 1)];
@@ -201,10 +200,10 @@ export default function Targets({ rooms, cycles, targets, theme, onSave }) {
 
   return (
     <div className="mt-8 flex flex-col gap-5">
-      <CyclePicker theme={theme} cycles={cycles} year={year} cycle={cycle} onYear={setYear} onCycle={setCycle} />
+      <CyclePicker theme={theme} cycles={cycles} rooms={rooms} year={year} cycle={cycle} onYear={setYear} onCycle={setCycle} />
       <div className={cx.card + " px-6 py-5 text-sm leading-relaxed text-vt3"}>
         <span className="font-semibold text-vt1">{cy.name}</span>
-        {cy.current ? " is running: Live Rooms and the room pages use these targets now. " : " is closed: its targets are kept for the record. "}
+        {cy.current ? " is running: Live Rooms and the room pages use these targets now. " : cy.scheduled ? " is scheduled: these targets take over when it starts. " : " is closed: its targets are kept for the record. "}
         <span className="font-semibold text-vt1">Low – High</span> is the in-range band (green). Within <span className="font-semibold text-vt1">Drift ±</span> outside it a
         reading is drifting (orange); beyond that it's out of range (red). Values marked <span className="font-semibold">default</span> haven't been set for that room in
         this cycle. Press <span className="font-semibold text-vt1">Edit</span> on a room to change its targets. A new cycle starts with each room's targets from its previous
