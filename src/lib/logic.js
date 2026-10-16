@@ -189,7 +189,7 @@ export function buildCycles(rows) {
       scheduled,
       days: span(start, end),
       estDays: estEnd ? span(start, estEnd) : null,
-      name: `${c.year} · ${c.label}`,
+      name: c.label, // Vera cycle ID, e.g. "26.01"; it already carries the year
       range: scheduled
         ? "starts " + fd(start) + (estEnd ? " · est. end " + fd(estEnd) : "")
         : fd(start) + " – " + (current ? "today" + (estEnd ? " · est. end " + fd(estEnd) : "") : fd(end)),

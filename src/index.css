@@ -46,6 +46,15 @@
   --vshadow: 0 0 0 1px rgba(16, 185, 129, 0.1), 0 20px 40px -20px rgba(6, 32, 24, 0.22);
 }
 
+/* Native dropdown lists: a solid surface (the field itself is see-through, which turns the list grey). */
+select option {
+  background: var(--vpop);
+  color: var(--vt1);
+}
+select option:disabled {
+  color: var(--vt4);
+}
+
 html,
 body {
   margin: 0;

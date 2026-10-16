@@ -4,11 +4,12 @@ import Targets from "./Targets";
 import { cycleState, isoDay, tones } from "../lib/logic";
 
 const FAR = "9999-12-31";
-// Cycle names come from a fixed list so they stay consistent: Cycle 1 … Cycle 30 each year.
+// Cycle names are Vera's cycle IDs, YY.NN text: 26.01 … 26.30 in 2026. NN always has two digits (26.10, never 26.1).
 // Several can run at once in different rooms (e.g. 26.10 in Room 4 and 26.11 in Room 5).
-const CYCLE_NAMES = Array.from({ length: 30 }, (_, i) => "Cycle " + (i + 1));
+const MAX_CYCLES = 30;
+const cycleNames = (year) => Array.from({ length: MAX_CYCLES }, (_, i) => String(year).slice(-2) + "." + String(i + 1).padStart(2, "0"));
 const usedNames = (cycles, year, exceptKey) => cycles.filter((c) => c.year === Number(year) && c.key !== exceptKey).map((c) => c.label);
-const firstFree = (cycles, year) => CYCLE_NAMES.find((n) => !usedNames(cycles, year).includes(n)) || "";
+const firstFree = (cycles, year) => cycleNames(year).find((n) => !usedNames(cycles, year).includes(n)) || "";
 const today = () => isoDay(new Date());
 
 // A room's date span in a cycle. Running cycles reach at least today (and their estimated end).
@@ -21,8 +22,8 @@ const overlaps = ([a1, b1], [a2, b2]) => a1 <= b2 && a2 <= b1;
 
 /** Returns an error message, or "" when the cycle can be saved. `self` is the cycle being edited. */
 function check({ name, year, startDate, endDate, roomIds, closing }, cycles, rooms, self) {
-  if (!self && usedNames(cycles, year).length >= CYCLE_NAMES.length) return `${year} already has ${CYCLE_NAMES.length} cycles, the most allowed.`;
-  if (!CYCLE_NAMES.includes(name)) return "Pick a cycle name from the list.";
+  if (!self && usedNames(cycles, year).length >= MAX_CYCLES) return `${year} already has ${MAX_CYCLES} cycles, the most allowed.`;
+  if (!cycleNames(year).includes(name)) return `Pick a cycle ID from the list (${cycleNames(year)[0]}, ${cycleNames(year)[1]} …).`;
   if (!/^\d{4}$/.test(String(year))) return "Year should look like 2026.";
   if (!startDate) return "Pick a start date.";
   if (!endDate) return closing ? "Pick the actual end date." : "Pick an estimated end date.";
@@ -73,14 +74,22 @@ function Select({ value, onChange, light, children }) {
   );
 }
 
-// Cycle 1-5; names already used that year are disabled.
-const nameOptions = (cycles, year, exceptKey) => {
+// YY.01-YY.30; IDs already used that year are disabled. An old name (e.g. "Cycle 11") shows until it's renamed.
+const nameOptions = (cycles, year, exceptKey, current) => {
   const used = usedNames(cycles, year, exceptKey);
-  return CYCLE_NAMES.map((n) => (
-    <option key={n} value={n} disabled={used.includes(n)}>
-      {n + (used.includes(n) ? " · used" : "")}
-    </option>
-  ));
+  const names = cycleNames(year);
+  return [
+    current && !names.includes(current) && (
+      <option key="old" value={current} disabled>
+        {current + " · pick a new ID"}
+      </option>
+    ),
+    ...names.map((n) => (
+      <option key={n} value={n} disabled={used.includes(n)}>
+        {n + (used.includes(n) ? " · used" : "")}
+      </option>
+    )),
+  ];
 };
 
 const Field = ({ label, children }) => (
@@ -109,7 +118,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
     setForm((f) => ({ ...f, name: firstFree(cycles, f.year) }));
     setNeedName(false);
   }, [cycles, needName]);
-  const yearFull = usedNames(cycles, form.year).length >= CYCLE_NAMES.length;
+  const yearFull = usedNames(cycles, form.year).length >= MAX_CYCLES;
   // Cycles usually cover one room, so none is ticked to start with.
   const [picked, setPicked] = useState(() => Object.fromEntries(rooms.map((r) => [r.id, { on: false, strain: r.cultivar || "" }])));
   // Inline edit / close on one cycle: { key, mode: "edit" | "close", name, startDate, endDate }
@@ -142,7 +151,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
           endDate: form.endDate,
           rooms: roomIds.map((roomId) => ({ roomId, strain: picked[roomId].strain.trim() })),
         }),
-      `Created ${form.year} · ${form.name.trim()} for ${roomIds.length} ${roomIds.length === 1 ? "room" : "rooms"}.`
+      `Created ${form.name.trim()} for ${roomIds.length} ${roomIds.length === 1 ? "room" : "rooms"}.`
     );
     if (ok) {
       setYear(Number(form.year));
@@ -289,7 +298,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
                     {edit.mode === "edit" && (
                       <Field label="Name">
                         <Select light={light} value={edit.name} onChange={(v) => setEdit({ ...edit, name: v })}>
-                          {nameOptions(cycles, c.year, c.key)}
+                          {nameOptions(cycles, c.year, c.key, edit.name)}
                         </Select>
                       </Field>
                     )}
@@ -325,7 +334,7 @@ export default function Settings({ tab, onTab, rooms, cycles, targets, theme, on
               <Field label="Name">
                 <Select light={light} value={form.name} onChange={(v) => setForm({ ...form, name: v })}>
                   <option value="" disabled>
-                    {yearFull ? `All ${CYCLE_NAMES.length} used` : "Pick a cycle"}
+                    {yearFull ? `All ${MAX_CYCLES} used` : "Pick a cycle ID"}
                   </option>
                   {nameOptions(cycles, form.year)}
                 </Select>

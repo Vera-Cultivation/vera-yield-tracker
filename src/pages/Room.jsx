@@ -184,9 +184,9 @@ export default function Room({ room, theme, canReport, saved, harvests, cycles, 
       const w = windowed(series, k, range.start, range.end);
       return linePath(w.vals, 1000, 300, min, max, w.xs);
     };
-    return { vwc: path("vwc", 0, 70), ec: path("ec", 0, 12), rzt: path("rzt", 55, 90) };
+    return { vwc: path("vwc", 0, 70), ec: path("ec", 0, 12) };
   }, [series, range]);
-  const hasRz = Boolean(chart.vwc || chart.ec || chart.rzt);
+  const hasRz = Boolean(chart.vwc || chart.ec);
   const envSynced = lastTs(series, "temp") || room.updatedAt;
   const rzSynced = lastTs(series, "vwc") || room.updatedAt;
 
@@ -314,7 +314,7 @@ export default function Room({ room, theme, canReport, saved, harvests, cycles, 
         </SectionHead>
         <div className="mt-6 grid grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-stretch gap-6">
           <div className="flex flex-col gap-3.5">
-            {RZ_DEFS.map(([k, label, unit, dp, min, max]) => {
+            {RZ_DEFS.filter(([k]) => k !== "rzt").map(([k, label, unit, dp, min, max]) => {
               const z = view.rz[k];
               const t = tone(T, status(z[0], z[1], z[2], z[3]));
               return (
@@ -353,7 +353,6 @@ export default function Room({ room, theme, canReport, saved, harvests, cycles, 
                 {[
                   ["#22d3ee", "VWC %"],
                   ["#fbbf24", "EC dS/m"],
-                  ["#fb7185", "Root zone °F"],
                 ].map(([c, l]) => (
                   <span key={l} className="flex items-center gap-2 text-vt2">
                     <span className="h-[3px] w-4 rounded-sm" style={{ background: c }} />
@@ -370,7 +369,6 @@ export default function Room({ room, theme, canReport, saved, harvests, cycles, 
               </div>
               <div className="relative min-h-[300px] overflow-hidden rounded-xl border border-vbd">
                 <svg viewBox="0 0 1000 300" preserveAspectRatio="none" className="absolute inset-0 block h-full w-full">
-                  <path d={chart.rzt} fill="none" strokeWidth="1.6" style={{ stroke: "var(--vcoral)" }} strokeOpacity="0.85" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                   <path d={chart.ec} fill="none" strokeWidth="2.2" style={{ stroke: "var(--vamber)" }} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                   <path d={chart.vwc} fill="none" strokeWidth="2.4" style={{ stroke: "var(--vcyan)" }} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                 </svg>

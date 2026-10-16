@@ -8,7 +8,7 @@ export { isConfigured };
 
 /* ------------------------------------------------------------------ mappers */
 // harvest_cycles has one row per room per cycle. The app groups rows with the same year and name
-// into one cycle ("2026 · Cycle 3"); `key` is that group, `ids` maps room id -> harvest_cycles.id.
+// into one cycle ("26.03"); `key` is that group, `ids` maps room id -> harvest_cycles.id.
 const cycleKeyOf = (c) => c.harvest_year + "|" + c.name;
 let cycleKeyById = {};
 
